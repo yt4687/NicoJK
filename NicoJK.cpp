@@ -175,7 +175,9 @@ bool CNicoJK::Initialize()
 	}
 	// OsdCompositorは他プラグインと共用することがあるので、有効にするならFinalize()まで破棄しない
 	bool bEnableOsdCompositor = GetPrivateProfileInt(TEXT("Setting"), TEXT("enableOsdCompositor"), 0, szIniFileName_) != 0;
-	if (!commentWindow_.Initialize(g_hinstDLL, &bEnableOsdCompositor)) {
+	// フィルタグラフを取得できないバージョンではAPIフックを使う
+	bool bSetHookOsdCompositor = m_pApp->GetVersion() < TVTest::MakeVersion(0, 9, 0);
+	if (!commentWindow_.Initialize(g_hinstDLL, &bEnableOsdCompositor, bSetHookOsdCompositor)) {
 		WSACleanup();
 		return false;
 	}
@@ -1064,6 +1066,14 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 				break;
 			}
 		}
+		break;
+	case TVTest::EVENT_FILTERGRAPH_INITIALIZED:
+		// フィルタグラフの初期化終了
+		pThis->commentWindow_.OnFilterGraphInitialized(reinterpret_cast<const TVTest::FilterGraphInfo*>(lParam1)->pGraphBuilder);
+		break;
+	case TVTest::EVENT_FILTERGRAPH_FINALIZE:
+		// フィルタグラフの終了処理開始
+		pThis->commentWindow_.OnFilterGraphFinalize(reinterpret_cast<const TVTest::FilterGraphInfo*>(lParam1)->pGraphBuilder);
 		break;
 	}
 	return 0;

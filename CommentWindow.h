@@ -31,7 +31,7 @@ public:
 		CHAT_ALIGN_LEFT,
 		CHAT_ALIGN_RIGHT,
 	};
-	bool Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor);
+	bool Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bool bSetHookOsdCompositor);
 	void Finalize();
 	CCommentWindow();
 	~CCommentWindow();
@@ -55,6 +55,8 @@ public:
 	void Forward(int duration);
 	void Update();
 	bool IsCreated() const { return hwnd_ != NULL; }
+	void OnFilterGraphInitialized(IGraphBuilder *pGraphBuilder) { osdCompositor_.OnFilterGraphInitialized(pGraphBuilder); }
+	void OnFilterGraphFinalize(IGraphBuilder *pGraphBuilder) { osdCompositor_.OnFilterGraphFinalize(pGraphBuilder); }
 private:
 	struct CHAT {
 		DWORD pts;

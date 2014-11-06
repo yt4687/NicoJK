@@ -55,7 +55,7 @@ static void ApplyOpacity(DWORD *pBits, int range, BYTE opacityA, BYTE opacityRGB
 	}
 }
 
-bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor)
+bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bool bSetHookOsdCompositor)
 {
 	if (!hinst_) {
 		WNDCLASSEX wc = {0};
@@ -76,7 +76,7 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor)
 		if (pbEnableOsdCompositor && *pbEnableOsdCompositor) {
 			// ã[éóÇ≈Ç»Ç¢OSDÇóLå¯Ç…Ç∑ÇÈ
 			// é¿ç€Ç…égÇ§Ç©Ç«Ç§Ç©ÇÕSetStyle()Ç≈åàÇﬂÇÈ
-			*pbEnableOsdCompositor = osdCompositor_.Initialize();
+			*pbEnableOsdCompositor = osdCompositor_.Initialize(bSetHookOsdCompositor);
 			osdCompositor_.SetUpdateCallback(UpdateCallback, this);
 		}
 
