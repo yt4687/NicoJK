@@ -85,9 +85,9 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor)
 		bWindows8_ = false;
 		if (GetVersionEx(&vi)) {
 			bWindows8_ = vi.dwMajorVersion==6 && vi.dwMinorVersion==2;
-			if (vi.dwMajorVersion >= 6 && (hUser32_ = LoadLibrary(TEXT("user32.dll"))) != NULL) {
+			if (vi.dwMajorVersion >= 6) {
 				// Ç±ÇÃAPIÇÕVistaà»ç~Ç…ë∂ç›Ç∑ÇÈÇ™VistaÇÃé¿ëïÇÕÉoÉOÇä‹ÇﬁÇÁÇµÇ¢(KB955688)ÇÃÇ≈íçà”
-				(void*&)pfnUpdateLayeredWindowIndirect_ = GetProcAddress(hUser32_, "UpdateLayeredWindowIndirect");
+				(void*&)pfnUpdateLayeredWindowIndirect_ = GetProcAddress(GetModuleHandle(TEXT("user32.dll")), "UpdateLayeredWindowIndirect");
 			}
 		}
 		bSse2Available_ = IsProcessorFeaturePresent(PF_XMMI64_INSTRUCTIONS_AVAILABLE) != FALSE;
@@ -98,10 +98,6 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor)
 void CCommentWindow::Finalize()
 {
 	pfnUpdateLayeredWindowIndirect_ = NULL;
-	if (hUser32_) {
-		FreeLibrary(hUser32_);
-		hUser32_ = NULL;
-	}
 	if (hinst_) {
         osdCompositor_.Uninitialize();
 		Gdiplus::GdiplusShutdown(gdiplusToken_);
@@ -113,7 +109,6 @@ void CCommentWindow::Finalize()
 CCommentWindow::CCommentWindow()
 	: hinst_(NULL)
 	, gdiplusToken_(0)
-	, hUser32_(NULL)
 	, pfnUpdateLayeredWindowIndirect_(NULL)
 	, bWindows8_(false)
 	, bSse2Available_(false)

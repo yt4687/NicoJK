@@ -94,7 +94,6 @@ private:
 
 	HINSTANCE hinst_;
 	ULONG_PTR gdiplusToken_;
-	HMODULE hUser32_;
 	BOOL (WINAPI *pfnUpdateLayeredWindowIndirect_)(HWND hWnd, const UPDATELAYEREDWINDOWINFO *pULWInfo);
 	bool bWindows8_;
 	bool bSse2Available_;
