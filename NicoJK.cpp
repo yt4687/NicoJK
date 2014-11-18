@@ -184,9 +184,41 @@ bool CNicoJK::Initialize()
 	if (bEnableOsdCompositor) {
 		m_pApp->AddLog(L"OsdCompositorを初期化しました。");
 	}
+	int iconWidth, iconHeight;
+	bool bSmallIcon = m_pApp->GetStyleValuePixels(L"side-bar.item.icon.width", &iconWidth) &&
+	                  m_pApp->GetStyleValuePixels(L"side-bar.item.icon.height", &iconHeight) &&
+	                  iconWidth <= 16 && iconHeight <= 16;
+	// アイコンを登録
+	m_pApp->RegisterPluginIconFromResource(g_hinstDLL, MAKEINTRESOURCE(IDB_ICON));
+
 	// コマンドを登録
-	m_pApp->RegisterCommand(COMMAND_HIDE_FORCE, L"HideForce", L"勢いウィンドウの表示切替");
-	m_pApp->RegisterCommand(COMMAND_HIDE_COMMENT, L"HideComment", L"実況コメントの表示切替");
+	TVTest::PluginCommandInfo ci;
+	ci.Size = sizeof(ci);
+	ci.Flags = TVTest::PLUGIN_COMMAND_FLAG_ICONIZE;
+	ci.State = TVTest::PLUGIN_COMMAND_STATE_DISABLED;
+
+	ci.ID = COMMAND_HIDE_FORCE;
+	ci.pszText = L"HideForce";
+	ci.pszDescription = ci.pszName = L"勢いウィンドウの表示切替";
+	ci.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(bSmallIcon ? IDB_FORCE16 : IDB_FORCE), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
+	if (m_pApp->QueryMessage(TVTest::MESSAGE_REGISTERPLUGINCOMMAND)) {
+		m_pApp->RegisterPluginCommand(&ci);
+	} else {
+		m_pApp->RegisterCommand(ci.ID, ci.pszText, ci.pszName);
+	}
+	DeleteObject(ci.hbmIcon);
+
+	ci.ID = COMMAND_HIDE_COMMENT;
+	ci.pszText = L"HideComment";
+	ci.pszDescription = ci.pszName = L"実況コメントの表示切替";
+	ci.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(bSmallIcon ? IDB_COMMENT16 : IDB_COMMENT), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
+	if (m_pApp->QueryMessage(TVTest::MESSAGE_REGISTERPLUGINCOMMAND)) {
+		m_pApp->RegisterPluginCommand(&ci);
+	} else {
+		m_pApp->RegisterCommand(ci.ID, ci.pszText, ci.pszName);
+	}
+	DeleteObject(ci.hbmIcon);
+
 	memset(s_.forwardList, 0, sizeof(s_.forwardList));
 	for (int i = 0; i < _countof(s_.forwardList); ++i) {
 		TCHAR key[16], name[32];
@@ -346,6 +378,8 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			DeleteFont(hForceFont_);
 			hForceFont_ = NULL;
 		}
+		m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
+		m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
 		return true;
 	}
 }
@@ -1046,11 +1080,13 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 						// 非表示前の不透明度を復元する
 						BYTE newOpacity = static_cast<BYTE>(pThis->s_.commentOpacity>>8);
 						pThis->commentWindow_.SetOpacity(newOpacity == 0 ? 255 : newOpacity);
+						pThis->m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::COMMAND_ICON_STATE_CHECKED);
 					} else {
 						pThis->commentWindow_.Destroy();
 						// 8-15bitに非表示前の不透明度を記憶しておく
 						pThis->s_.commentOpacity = (pThis->s_.commentOpacity&~0xFF00) | (pThis->commentWindow_.GetOpacity()<<8);
 						pThis->commentWindow_.SetOpacity(0);
+						pThis->m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, 0);
 					}
 					SendDlgItemMessage(pThis->hForce_, IDC_SLIDER_OPACITY, TBM_SETPOS, TRUE, (pThis->commentWindow_.GetOpacity() * 10 + 254) / 255);
 				break;
@@ -1439,6 +1475,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			commentWindow_.SetDisplayDuration(s_.commentDuration);
 			commentWindow_.SetDrawLineCount(s_.commentDrawLineCount);
 			commentWindow_.SetOpacity(static_cast<BYTE>(s_.commentOpacity));
+			m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, commentWindow_.GetOpacity() != 0 ? TVTest::COMMAND_ICON_STATE_CHECKED : 0);
 			if (commentWindow_.GetOpacity() != 0 && m_pApp->GetPreview()) {
 				HWND hwndContainer = FindVideoContainer();
 				commentWindow_.Create(hwndContainer);
@@ -1496,6 +1533,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SetWindowLong(hwnd, GWL_EXSTYLE, s_.forceOpacity == 255 ? style & ~WS_EX_LAYERED : style | WS_EX_LAYERED);
 			SetLayeredWindowAttributes(hwnd, 0, static_cast<BYTE>(s_.forceOpacity), LWA_ALPHA);
 
+			m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, 0);
 			if ((s_.hideForceWindow & 1) == 0) {
 				ShowWindow(hwnd, SW_SHOWNA);
 				SendMessage(hwnd, WM_SET_ZORDER, 0, 0);
@@ -1557,6 +1595,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				commentWindow_.Destroy();
 			}
 			commentWindow_.SetOpacity(newOpacity);
+			m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, newOpacity != 0 ? TVTest::COMMAND_ICON_STATE_CHECKED : 0);
 		}
 		break;
 	case WM_DRAWITEM:
@@ -2309,6 +2348,8 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		}
 		return TRUE;
 	case WM_SHOWWINDOW:
+		m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, wParam != 0 ? TVTest::COMMAND_ICON_STATE_CHECKED : 0);
+		// FALL THROUGH!
 	case WM_SIZE:
 		{
 			RECT rcParent, rc;

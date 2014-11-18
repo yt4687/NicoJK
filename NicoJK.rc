@@ -11,6 +11,30 @@
 
 
 //
+// Bitmap resources
+//
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_ICON           BITMAP         ".\\Icon.bmp"
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_FORCE          BITMAP         ".\\Force.bmp"
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_FORCE16        BITMAP         ".\\Force16.bmp"
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_COMMENT        BITMAP         ".\\Comment.bmp"
+
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_COMMENT16      BITMAP         ".\\Comment16.bmp"
+
+
+
+//
 // Dialog resources
 //
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
