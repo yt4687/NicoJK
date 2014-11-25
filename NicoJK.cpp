@@ -185,9 +185,8 @@ bool CNicoJK::Initialize()
 		m_pApp->AddLog(L"OsdCompositorを初期化しました。");
 	}
 	int iconWidth, iconHeight;
-	bool bSmallIcon = m_pApp->GetStyleValuePixels(L"side-bar.item.icon.width", &iconWidth) &&
-	                  m_pApp->GetStyleValuePixels(L"side-bar.item.icon.height", &iconHeight) &&
-	                  iconWidth <= 16 && iconHeight <= 16;
+	bool bSmallIcon = (!m_pApp->GetStyleValuePixels(L"side-bar.item.icon.width", &iconWidth) || iconWidth <= 16) &&
+	                  (!m_pApp->GetStyleValuePixels(L"side-bar.item.icon.height", &iconHeight) || iconHeight <= 16);
 	// アイコンを登録
 	m_pApp->RegisterPluginIconFromResource(g_hinstDLL, MAKEINTRESOURCE(IDB_ICON));
 
