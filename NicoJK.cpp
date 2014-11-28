@@ -200,9 +200,7 @@ bool CNicoJK::Initialize()
 	ci.pszText = L"HideForce";
 	ci.pszDescription = ci.pszName = L"勢いウィンドウの表示切替";
 	ci.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(bSmallIcon ? IDB_FORCE16 : IDB_FORCE), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
-	if (m_pApp->QueryMessage(TVTest::MESSAGE_REGISTERPLUGINCOMMAND)) {
-		m_pApp->RegisterPluginCommand(&ci);
-	} else {
+	if (!m_pApp->RegisterPluginCommand(&ci)) {
 		m_pApp->RegisterCommand(ci.ID, ci.pszText, ci.pszName);
 	}
 	DeleteObject(ci.hbmIcon);
@@ -211,9 +209,7 @@ bool CNicoJK::Initialize()
 	ci.pszText = L"HideComment";
 	ci.pszDescription = ci.pszName = L"実況コメントの表示切替";
 	ci.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(bSmallIcon ? IDB_COMMENT16 : IDB_COMMENT), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
-	if (m_pApp->QueryMessage(TVTest::MESSAGE_REGISTERPLUGINCOMMAND)) {
-		m_pApp->RegisterPluginCommand(&ci);
-	} else {
+	if (!m_pApp->RegisterPluginCommand(&ci)) {
 		m_pApp->RegisterCommand(ci.ID, ci.pszText, ci.pszName);
 	}
 	DeleteObject(ci.hbmIcon);
