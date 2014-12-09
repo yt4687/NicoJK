@@ -138,7 +138,6 @@ CNicoJK::CNicoJK()
 	memset(&s_, 0, sizeof(s_));
 	// TOTを取得できていないことを表す
 	ftTot_[0].dwHighDateTime = 0xFFFFFFFF;
-	ftTot_[1].dwHighDateTime = 0xFFFFFFFF;
 	pcrPids_[0] = -1;
 }
 
@@ -2424,28 +2423,39 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 		bool bReset = tick - pThis->pcrTick_ >= 2000;
 		pThis->pcrTick_ = tick;
 		if (pid == pThis->pcrPid_) {
-			long long pcrDiff = static_cast<long long>(pcr) - pThis->pcr_;
-			if (pcr < 45000 && (0xFFFFFFFF - 45000) < pThis->pcr_) {
-				// ラップアラウンド
-				pcrDiff += 0x100000000LL;
-			}
+			long long pcrDiff = DWORD_MSB(pcr - pThis->pcr_) ? -static_cast<long long>(pThis->pcr_ - pcr) : static_cast<long long>(pcr - pThis->pcr_);
+			// ラップアラウンド近傍を特別扱いする必要はない(またいでシークする場合だってある)
 
-			if (0 <= pcrDiff && pcrDiff < 45000) {
+			if (bReset || 0 <= pcrDiff && pcrDiff < 45000) {
 				// 1秒以内は通常の再生と見なす
 			} else if (abs(pcrDiff) < 15 * 60 * 45000) {
 				// -15～0分、+1秒～15分PCRが飛んでいる場合、シークとみなし、
 				// シークした分だけTOTをずらして読み込み直す
-				if (pThis->ftTot_[0].dwHighDateTime != 0xFFFFFFFF) {
+				if (pThis->ftTot_[0].dwHighDateTime != 0xFFFFFFFF && pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFF) {
 					long long totDiff = pcrDiff * FILETIME_MILLISECOND / 45;
 					pThis->ftTot_[0] += totDiff;
 					if (pThis->ftTot_[1].dwHighDateTime != 0xFFFFFFFF) {
 						pThis->ftTot_[1] += totDiff;
 					}
+					// 保留中のTOTはシーク後に取得した可能性があるので捨てる(再生速度の推定が狂ってコメントが大量に流れたりするのを防ぐため)
+					pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFE;
 					pThis->bResyncComment_ = true;
+				} else {
+					bReset = true;
 				}
 			} else {
 				// それ以上飛んでたら別ストリームと見なしてリセット
 				bReset = true;
+			}
+			// 保留中のTOT(要素2)はPCRの取得後に利用可能(要素0にシフト)にする
+			if (pThis->ftTot_[0].dwHighDateTime != 0xFFFFFFFF && pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFE) {
+				if (pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFF) {
+					pThis->ftTot_[1] = pThis->ftTot_[0];
+					pThis->ftTot_[0] = pThis->ftTot_[2];
+					pThis->totTick_[1] = pThis->totTick_[0];
+					pThis->totTick_[0] = pThis->totTick_[2];
+				}
+				pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFE;
 			}
 			pThis->pcr_ = pcr;
 		}
@@ -2479,10 +2489,17 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 					ft += -32400000LL * FILETIME_MILLISECOND;
 					dprintf(TEXT("CNicoJK::StreamCallback() TOT\n")); // DEBUG
 					CBlockLock lock(&pThis->streamLock_);
-					pThis->ftTot_[1] = pThis->ftTot_[0];
-					pThis->ftTot_[0] = ft;
-					pThis->totTick_[1] = pThis->totTick_[0];
-					pThis->totTick_[0] = GetTickCount();
+					// 時刻が変化したときだけ
+					if (ft - pThis->ftTot_[0] != 0) {
+						pThis->ftTot_[2] = ft;
+						pThis->totTick_[2] = GetTickCount();
+						if (pThis->ftTot_[0].dwHighDateTime == 0xFFFFFFFF) {
+							pThis->ftTot_[0] = pThis->ftTot_[2];
+							pThis->totTick_[0] = pThis->totTick_[2];
+							pThis->ftTot_[1].dwHighDateTime = 0xFFFFFFFF;
+							pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFF;
+						}
+					}
 				}
 			}
 		}

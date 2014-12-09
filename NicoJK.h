@@ -191,8 +191,8 @@ private:
 	char readLogText_[CHAT_TAG_MAX];
 	unsigned int tmReadLogText_;
 	DWORD readLogfileTick_;
-	FILETIME ftTot_[2];
-	DWORD totTick_[2];
+	FILETIME ftTot_[3];
+	DWORD totTick_[3];
 	DWORD pcr_;
 	DWORD pcrTick_;
 	int pcrPid_;
