@@ -21,7 +21,7 @@ public:
 	// 投稿できる最大コメント文字数(たぶん安易に変更しないほうがいい)
 	static const int POST_COMMENT_MAX = 76;
 	// 連投制限(短いと規制されるとのウワサ)
-	static const int POST_COMMENT_INTERVAL = 3000;
+	static const int POST_COMMENT_INTERVAL = 2000;
 	// CTVTestPlugin
 	CNicoJK();
 	bool GetPluginInfo(TVTest::PluginInfo *pInfo);
