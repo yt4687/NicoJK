@@ -490,7 +490,8 @@ void CNicoJK::ToggleStreamCallback(bool bSet)
 void CNicoJK::LoadFromIni()
 {
 	// iniはセクション単位で読むと非常に速い。起動時は処理が混み合うのでとくに有利
-	TCHAR *pBuf = NewGetPrivateProfileSection(TEXT("Setting"), szIniFileName_);
+	std::vector<TCHAR> buf = GetPrivateProfileSectionBuffer(TEXT("Setting"), szIniFileName_);
+	LPCTSTR pBuf = &buf.front();
 	s_.hideForceWindow		= GetBufferedProfileInt(pBuf, TEXT("hideForceWindow"), 0);
 	s_.forceFontSize		= GetBufferedProfileInt(pBuf, TEXT("forceFontSize"), 10);
 	GetBufferedProfileString(pBuf, TEXT("forceFontName"), TEXT("Meiryo UI"), s_.forceFontName, _countof(s_.forceFontName));
@@ -542,17 +543,15 @@ void CNicoJK::LoadFromIni()
 	if (!PathIsDirectory(s_.logfileFolder)) {
 		s_.logfileFolder[0] = TEXT('\0');
 	}
-	delete [] pBuf;
 
-	pBuf = NewGetPrivateProfileSection(TEXT("Window"), szIniFileName_);
-	s_.rcForce.left			= GetBufferedProfileInt(pBuf, TEXT("ForceX"), 0);
-	s_.rcForce.top			= GetBufferedProfileInt(pBuf, TEXT("ForceY"), 0);
-	s_.rcForce.right		= GetBufferedProfileInt(pBuf, TEXT("ForceWidth"), 0) + s_.rcForce.left;
-	s_.rcForce.bottom		= GetBufferedProfileInt(pBuf, TEXT("ForceHeight"), 0) + s_.rcForce.top;
-	s_.forceOpacity			= GetBufferedProfileInt(pBuf, TEXT("ForceOpacity"), 255);
-	s_.commentOpacity		= GetBufferedProfileInt(pBuf, TEXT("CommentOpacity"), 255);
-	s_.bSetRelative			= GetBufferedProfileInt(pBuf, TEXT("SetRelative"), 0) != 0;
-	delete [] pBuf;
+	buf = GetPrivateProfileSectionBuffer(TEXT("Window"), szIniFileName_);
+	s_.rcForce.left			= GetBufferedProfileInt(&buf.front(), TEXT("ForceX"), 0);
+	s_.rcForce.top			= GetBufferedProfileInt(&buf.front(), TEXT("ForceY"), 0);
+	s_.rcForce.right		= GetBufferedProfileInt(&buf.front(), TEXT("ForceWidth"), 0) + s_.rcForce.left;
+	s_.rcForce.bottom		= GetBufferedProfileInt(&buf.front(), TEXT("ForceHeight"), 0) + s_.rcForce.top;
+	s_.forceOpacity			= GetBufferedProfileInt(&buf.front(), TEXT("ForceOpacity"), 255);
+	s_.commentOpacity		= GetBufferedProfileInt(&buf.front(), TEXT("CommentOpacity"), 255);
+	s_.bSetRelative			= GetBufferedProfileInt(&buf.front(), TEXT("SetRelative"), 0) != 0;
 
 	ntsIDList_.clear();
 	ntsIDList_.reserve(_countof(DEFAULT_NTSID_TABLE));
@@ -561,8 +560,8 @@ void CNicoJK::LoadFromIni()
 		ntsIDList_.push_back(e);
 	}
 	// 設定ファイルのネットワーク/サービスID-実況ID対照表を、ソートを維持しながらマージ
-	pBuf = NewGetPrivateProfileSection(TEXT("Channels"), szIniFileName_);
-	for (LPCTSTR p = pBuf; *p; p += lstrlen(p) + 1) {
+	buf = GetPrivateProfileSectionBuffer(TEXT("Channels"), szIniFileName_);
+	for (LPCTSTR p = &buf.front(); *p; p += lstrlen(p) + 1) {
 		NETWORK_SERVICE_ID_ELEM e;
 		bool bPrior = _stscanf_s(p, TEXT("0x%x=+%d"), &e.ntsID, &e.jkID) == 2;
 		if (bPrior) {
@@ -580,7 +579,6 @@ void CNicoJK::LoadFromIni()
 			}
 		}
 	}
-	delete [] pBuf;
 
 	rplList_.clear();
 	LoadRplListFromIni(TEXT("AutoReplace"), &rplList_);
@@ -600,17 +598,17 @@ void CNicoJK::SaveToIni()
 
 void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplList)
 {
-	TCHAR *pBuf = NewGetPrivateProfileSection(section, szIniFileName_);
+	std::vector<TCHAR> buf = GetPrivateProfileSectionBuffer(section, szIniFileName_);
 	size_t lastSize = pRplList->size();
-	for (LPCTSTR p = pBuf; *p; p += lstrlen(p) + 1) {
+	for (LPCTSTR p = &buf.front(); *p; p += lstrlen(p) + 1) {
 		RPL_ELEM e;
 		if (!StrCmpNI(p, TEXT("Pattern"), 7) && StrToIntEx(&p[7], STIF_DEFAULT, &e.key)) {
 			lstrcpyn(e.section, section, _countof(e.section));
 			TCHAR key[32];
 			wsprintf(key, TEXT("Comment%d"), e.key);
-			GetBufferedProfileString(pBuf, key, TEXT(""), e.comment, _countof(e.comment));
+			GetBufferedProfileString(&buf.front(), key, TEXT(""), e.comment, _countof(e.comment));
 			wsprintf(key, TEXT("Pattern%d"), e.key);
-			GetBufferedProfileString(pBuf, key, TEXT(""), e.pattern, _countof(e.pattern));
+			GetBufferedProfileString(&buf.front(), key, TEXT(""), e.pattern, _countof(e.pattern));
 			if (!e.AssignFromPattern()) {
 				TCHAR text[64];
 				wsprintf(text, TEXT("%sの正規表現が異常です。"), key);
@@ -620,7 +618,6 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 			}
 		}
 	}
-	delete [] pBuf;
 	std::sort(pRplList->begin() + lastSize, pRplList->end(), RPL_ELEM::COMPARE());
 }
 

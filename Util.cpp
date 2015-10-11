@@ -34,18 +34,18 @@ static const struct {
 };
 
 // 必要なバッファを確保してGetPrivateProfileSection()を呼ぶ
-TCHAR *NewGetPrivateProfileSection(LPCTSTR lpAppName, LPCTSTR lpFileName)
+std::vector<TCHAR> GetPrivateProfileSectionBuffer(LPCTSTR lpAppName, LPCTSTR lpFileName)
 {
-	TCHAR *pBuf = NULL;
-	for (int bufSize = 4096; bufSize < 1024 * 1024; bufSize *= 2) {
-		delete [] pBuf;
-		pBuf = new TCHAR[bufSize];
-		if ((int)GetPrivateProfileSection(lpAppName, pBuf, bufSize, lpFileName) < bufSize - 2) {
+	std::vector<TCHAR> buf(4096);
+	for (;;) {
+		DWORD len = GetPrivateProfileSection(lpAppName, &buf.front(), static_cast<DWORD>(buf.size()), lpFileName);
+		if (len < buf.size() - 2) {
+			buf.resize(len + 1);
 			break;
 		}
-		pBuf[0] = 0;
+		buf.resize(buf.size() * 2);
 	}
-	return pBuf;
+	return buf;
 }
 
 // GetPrivateProfileSection()で取得したバッファから、キーに対応する文字列を取得する
