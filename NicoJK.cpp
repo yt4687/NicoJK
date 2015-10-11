@@ -329,9 +329,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 				if (s_.timerInterval < 0) {
 					OSVERSIONINFO vi;
 					vi.dwOSVersionInfoSize = sizeof(vi);
-					BOOL bEnabled;
+					BOOL bCompEnabled;
 					// ここで"dwmapi.dll"を遅延読み込みしていることに注意(つまりXPではDwm*()を踏んではいけない)
-					if (GetVersionEx(&vi) && vi.dwMajorVersion >= 6 && SUCCEEDED(DwmIsCompositionEnabled(&bEnabled)) && bEnabled) {
+					if (GetVersionEx(&vi) && vi.dwMajorVersion >= 6 && SUCCEEDED(DwmIsCompositionEnabled(&bCompEnabled)) && bCompEnabled) {
 						bQuitSyncThread_ = false;
 						hSyncThread_ = reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, SyncThread, this, 0, NULL));
 						if (hSyncThread_) {
@@ -1582,9 +1582,9 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			BYTE newOpacity = static_cast<BYTE>(HIWORD(wParam) * 255 / 10);
 			if (commentWindow_.GetOpacity() == 0 && newOpacity != 0 && m_pApp->GetPreview()) {
 				commentWindow_.ClearChat();
-				HWND hwnd = FindVideoContainer();
-				commentWindow_.Create(hwnd);
-				bHalfSkip_ = GetWindowHeight(hwnd) >= s_.halfSkipThreshold;
+				HWND hwndContainer = FindVideoContainer();
+				commentWindow_.Create(hwndContainer);
+				bHalfSkip_ = GetWindowHeight(hwndContainer) >= s_.halfSkipThreshold;
 			} else if (commentWindow_.GetOpacity() != 0 && newOpacity == 0) {
 				commentWindow_.Destroy();
 			}
