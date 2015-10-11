@@ -437,7 +437,7 @@ bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
 }
 
 // 指定プロセスを実行して標準出力の文字列を得る
-bool GetProcessOutput(LPTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout)
+bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout)
 {
 	bool bRet = false;
 	SECURITY_ATTRIBUTES sa;
@@ -446,15 +446,14 @@ bool GetProcessOutput(LPTSTR commandLine, LPCTSTR currentDir, char *buf, int buf
 	sa.bInheritHandle = TRUE;
 	HANDLE hReadPipe, hWritePipe;
 	if (CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
-		TCHAR lastDir[MAX_PATH];
-		DWORD dwRet;
-		if (!currentDir || (dwRet = GetCurrentDirectory(MAX_PATH, lastDir)) < MAX_PATH && dwRet && SetCurrentDirectory(currentDir)) {
+		{
 			STARTUPINFO si = {0};
 			si.cb = sizeof(si);
 			si.dwFlags = STARTF_USESTDHANDLES;
 			si.hStdOutput = hWritePipe;
 			PROCESS_INFORMATION pi;
-			if (CreateProcess(NULL, commandLine, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + lstrlen(commandLine) + 1);
+			if (CreateProcess(NULL, &commandLineBuf.front(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, currentDir, &si, &pi)) {
 				int bufCount = 0;
 				bool bBreak = false;
 				bRet = true;
@@ -482,9 +481,6 @@ bool GetProcessOutput(LPTSTR commandLine, LPCTSTR currentDir, char *buf, int buf
 				buf[bufCount] = '\0';
 				CloseHandle(pi.hThread);
 				CloseHandle(pi.hProcess);
-			}
-			if (currentDir) {
-				SetCurrentDirectory(lastDir);
 			}
 		}
 		CloseHandle(hWritePipe);

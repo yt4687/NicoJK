@@ -22,7 +22,7 @@ bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst);
 void GetFindFileList(LPCTSTR pattern, std::vector<WIN32_FIND_DATA> *pList, std::vector<LPWIN32_FIND_DATA> *pSortedList = NULL);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
-bool GetProcessOutput(LPTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout = INT_MAX);
+bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);
 
 struct LPWIN32_FIND_DATA_COMPARE {
