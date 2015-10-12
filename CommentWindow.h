@@ -10,7 +10,6 @@ public:
 	static const int DEFAULT_LINE_COUNT = 14;
 	static const int DEFAULT_LINE_DRAW_COUNT = 9999;
 	static const int DISPLAY_DURATION = 4000;
-	static const int CHAT_TEXT_MAX = 256;
 	// 表示すべきコメントがないときウィンドウを非表示にするまでの猶予[秒]
 	// (レイヤードウィンドウは被せているだけでもそれなりのコストがかかるため)
 	static const int AUTOHIDE_DELAY = 10;
@@ -71,17 +70,15 @@ private:
 		bool bDrew;
 		int currentDrawWidth;
 		int currentDrawHeight;
-		TCHAR text[CHAT_TEXT_MAX];
-		CHAT() {}
+		std::wstring text;
 	};
 	struct TEXTURE {
 		bool bUsed;
 		bool bSmall;
 		RECT rc;
 		Gdiplus::ARGB color;
-		TCHAR text[CHAT_TEXT_MAX];
-		TEXTURE() {}
-		bool IsMatch(const CHAT &c) const { return c.color == color && c.bSmall == bSmall && !lstrcmp(c.text, text); }
+		std::wstring text;
+		bool IsMatch(const CHAT &c) const { return c.color == color && c.bSmall == bSmall && c.text == text; }
 	};
 	bool AllocateWorkBitmap(int width, int height, bool *pbRealloc);
 	void UpdateLayeredWindow();

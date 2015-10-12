@@ -61,17 +61,29 @@ enum {
 	COMMAND_FORWARD_A,
 };
 
-bool CNicoJK::RPL_ELEM::AssignFromPattern()
+void CNicoJK::RPL_ELEM::SetEnabled(bool b)
+{
+	if (!pattern.empty()) {
+		if (b && TEXT('A') <= pattern[0] && pattern[0] <= TEXT('Z')) {
+			pattern[0] = pattern[0] - TEXT('A') + TEXT('a');
+		} else if (!b && TEXT('a') <= pattern[0] && pattern[0] <= TEXT('z')) {
+			pattern[0] = pattern[0] - TEXT('a') + TEXT('A');
+		}
+	}
+}
+
+bool CNicoJK::RPL_ELEM::SetPattern(LPCTSTR patt)
 {
 	// 入力パターンはsedコマンド等の形式をまねたもの
 	// ただし今のところ's/{regex}/{replace}/g'のみ対応(拡張可能)
 	// 先頭文字が大文字の場合はそのパターンが無効状態であることを示す
 	static const std::regex reBrace("[Ss](.)(.+?)\\1(.*?)\\1g");
-	char utf8[_countof(pattern) * 3];
-	int len = WideCharToMultiByte(CP_UTF8, 0, pattern, -1, utf8, _countof(utf8) - 1, NULL, NULL);
-	utf8[len] = '\0';
+	std::vector<char> utf8(WideCharToMultiByte(CP_UTF8, 0, patt, -1, NULL, 0, NULL, NULL));
+	if (utf8.empty() || WideCharToMultiByte(CP_UTF8, 0, patt, -1, &utf8.front(), static_cast<int>(utf8.size()), NULL, NULL) == 0) {
+		return false;
+	}
 	std::cmatch m;
-	if (!std::regex_match(utf8, m, reBrace)) {
+	if (!std::regex_match(&utf8.front(), m, reBrace)) {
 		return false;
 	}
 	try {
@@ -79,6 +91,7 @@ bool CNicoJK::RPL_ELEM::AssignFromPattern()
 	} catch (std::regex_error&) {
 		return false;
 	}
+	pattern = patt;
 	fmt.assign(m[3].first, m[3].length());
 	return true;
 }
@@ -135,7 +148,8 @@ CNicoJK::CNicoJK()
 	readLogText_[0] = '\0';
 	tmpSpecFileName_[0] = TEXT('\0');
 	dropFileName_[0] = TEXT('\0');
-	memset(&s_, 0, sizeof(s_));
+	SETTINGS s = {};
+	s_ = s;
 	// TOTを取得できていないことを表す
 	ftTot_[0].dwHighDateTime = 0xFFFFFFFF;
 	pcrPids_[0] = -1;
@@ -281,8 +295,8 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			// 必要ならサーバに渡すCookieを取得
 			cookie_[0] = '\0';
 			TCHAR currDir[MAX_PATH];
-			if (s_.execGetCookie[0] && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
-				if (!GetProcessOutput(s_.execGetCookie, currDir, cookie_, _countof(cookie_), 10000)) {
+			if (!s_.execGetCookie.empty() && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
+				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
 					cookie_[0] = '\0';
 					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。");
 				} else {
@@ -509,16 +523,21 @@ void CNicoJK::LoadFromIni()
 	s_.commentDuration		= GetBufferedProfileInt(pBuf, TEXT("commentDuration"), CCommentWindow::DISPLAY_DURATION);
 	s_.commentDrawLineCount = GetBufferedProfileInt(pBuf, TEXT("commentDrawLineCount"), CCommentWindow::DEFAULT_LINE_DRAW_COUNT);
 	s_.logfileMode			= GetBufferedProfileInt(pBuf, TEXT("logfileMode"), 0);
+	TCHAR val[SETTING_VALUE_MAX];
 	GetBufferedProfileString(pBuf, TEXT("logfileDrivers"),
 	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_Pipe.dll"),
-	                         s_.logfileDrivers, _countof(s_.logfileDrivers));
+	                         val, _countof(val));
+	s_.logfileDrivers = val;
 	GetBufferedProfileString(pBuf, TEXT("nonTunerDrivers"),
 	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_Pipe.dll"),
-	                         s_.nonTunerDrivers, _countof(s_.nonTunerDrivers));
-	GetBufferedProfileString(pBuf, TEXT("execGetCookie"), TEXT(""), s_.execGetCookie, _countof(s_.execGetCookie));
+	                         val, _countof(val));
+	s_.nonTunerDrivers = val;
+	GetBufferedProfileString(pBuf, TEXT("execGetCookie"), TEXT(""), val, _countof(val));
+	s_.execGetCookie = val;
 	GetBufferedProfileString(pBuf, TEXT("mailDecorations"),
 	                         TEXT("[cyan big]:[shita]:[green shita small]:[orange]::"),
-	                         s_.mailDecorations, _countof(s_.mailDecorations));
+	                         val, _countof(val));
+	s_.mailDecorations = val;
 	s_.bAnonymity			= GetBufferedProfileInt(pBuf, TEXT("anonymity"), 1) != 0;
 	s_.bUseOsdCompositor	= GetBufferedProfileInt(pBuf, TEXT("useOsdCompositor"), 0) != 0;
 	s_.bUseTexture			= GetBufferedProfileInt(pBuf, TEXT("useTexture"), 1) != 0;
@@ -527,7 +546,8 @@ void CNicoJK::LoadFromIni()
 	s_.bShowRadio			= GetBufferedProfileInt(pBuf, TEXT("showRadio"), 0) != 0;
 	s_.bDoHalfClose			= GetBufferedProfileInt(pBuf, TEXT("doHalfClose"), 0) != 0;
 	s_.maxAutoReplace		= GetBufferedProfileInt(pBuf, TEXT("maxAutoReplace"), 20);
-	GetBufferedProfileString(pBuf, TEXT("abone"), TEXT("### NG ### &"), s_.abone, _countof(s_.abone));
+	GetBufferedProfileString(pBuf, TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
+	s_.abone = val;
 	s_.dropLogfileMode		= GetBufferedProfileInt(pBuf, TEXT("dropLogfileMode"), 0);
 	s_.defaultPlaybackDelay	= GetBufferedProfileInt(pBuf, TEXT("defaultPlaybackDelay"), 500);
 	// 実況ログフォルダのパスを作成
@@ -603,13 +623,15 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 	for (LPCTSTR p = &buf.front(); *p; p += lstrlen(p) + 1) {
 		RPL_ELEM e;
 		if (!StrCmpNI(p, TEXT("Pattern"), 7) && StrToIntEx(&p[7], STIF_DEFAULT, &e.key)) {
-			lstrcpyn(e.section, section, _countof(e.section));
+			e.section = section;
 			TCHAR key[32];
 			wsprintf(key, TEXT("Comment%d"), e.key);
-			GetBufferedProfileString(&buf.front(), key, TEXT(""), e.comment, _countof(e.comment));
+			TCHAR val[SETTING_VALUE_MAX];
+			GetBufferedProfileString(&buf.front(), key, TEXT(""), val, _countof(val));
+			e.comment = val;
 			wsprintf(key, TEXT("Pattern%d"), e.key);
-			GetBufferedProfileString(&buf.front(), key, TEXT(""), e.pattern, _countof(e.pattern));
-			if (!e.AssignFromPattern()) {
+			GetBufferedProfileString(&buf.front(), key, TEXT(""), val, _countof(val));
+			if (!e.SetPattern(val)) {
 				TCHAR text[64];
 				wsprintf(text, TEXT("%sの正規表現が異常です。"), key);
 				m_pApp->AddLog(text);
@@ -628,10 +650,10 @@ void CNicoJK::SaveRplListToIni(LPCTSTR section, const std::vector<RPL_ELEM> &rpl
 	}
 	std::vector<RPL_ELEM>::const_iterator it = rplList.begin();
 	for (; it != rplList.end(); ++it) {
-		if (!lstrcmpi(it->section, section)) {
+		if (it->section == section) {
 			TCHAR key[32];
 			wsprintf(key, TEXT("Pattern%d"), it->key);
-			WritePrivateProfileString(section, key, it->pattern, szIniFileName_);
+			WritePrivateProfileString(section, key, it->pattern.c_str(), szIniFileName_);
 		}
 	}
 }
@@ -1021,7 +1043,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 	case TVTest::EVENT_DRIVERCHANGE:
 		// ドライバが変更された
 		if (pThis->m_pApp->IsPluginEnabled()) {
-			pThis->bUsingLogfileDriver_ = pThis->IsMatchDriverName(pThis->s_.logfileDrivers);
+			pThis->bUsingLogfileDriver_ = pThis->IsMatchDriverName(pThis->s_.logfileDrivers.c_str());
 		}
 		// FALL THROUGH!
 	case TVTest::EVENT_CHANNELCHANGE:
@@ -1042,7 +1064,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		if (pThis->m_pApp->IsPluginEnabled()) {
 			// ユーザの自発的なチャンネル変更(EVENT_CHANNELCHANGE)を捉えるのが原則だが
 			// 非チューナ系のBonDriverだとこれでは不十分なため
-			if (pThis->IsMatchDriverName(pThis->s_.nonTunerDrivers)) {
+			if (pThis->IsMatchDriverName(pThis->s_.nonTunerDrivers.c_str())) {
 				SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
 			}
 		}
@@ -1205,7 +1227,7 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 	std::cmatch m, mm;
 	unsigned int tm;
 	if (std::regex_match(tag, m, reChat) && GetChatDate(&tm, tag)) {
-		TCHAR text[CCommentWindow::CHAT_TEXT_MAX * 2];
+		TCHAR text[CHAT_TEXT_MAX];
 		int len = MultiByteToWideChar(CP_UTF8, 0, m[2].first, static_cast<int>(m[2].length()), text, _countof(text) - 1);
 		text[len] = TEXT('\0');
 		DecodeEntityReference(text);
@@ -1257,16 +1279,15 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 			}
 		}
 		if (bAbone) {
-			lstrcpyn(e.text, s_.abone, _countof(e.text));
-			int tail = lstrlen(e.text) - 1;
+			e.text = s_.abone;
 			// 末尾の'&'は元コメントに置き換える (TODO: 末尾以外にも対応したほうがいいかも)
-			if (tail >= 0 && e.text[tail] == TEXT('&')) {
-				lstrcpyn(&e.text[tail], text, _countof(e.text) - tail);
+			if (!e.text.empty() && e.text.back() == TEXT('&')) {
+				e.text.replace(e.text.size() - 1, 1, text);
 			}
 		} else {
-			lstrcpyn(e.text, text, _countof(e.text));
+			e.text = text;
 		}
-		logList_.push_back(e);
+		logList_.push_back(std::move(e));
 		return true;
 	}
 	return false;
@@ -1281,8 +1302,8 @@ void CNicoJK::OutputMessageLog(LPCTSTR text)
 	e.no = 0;
 	e.cr = RGB(0xFF, 0xFF, 0xFF);
 	lstrcpy(e.marker, TEXT("#"));
-	lstrcpyn(e.text, text, _countof(e.text));
-	logList_.push_back(e);
+	e.text = text;
+	logList_.push_back(std::move(e));
 	if (hForce_) {
 		SendMessage(hForce_, WM_UPDATE_LIST, FALSE, 0);
 	}
@@ -1360,15 +1381,16 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		wsprintf(text, TEXT("現在のコメントの表示期間は%dmsecです。"), commentWindow_.GetDisplayDuration());
 		OutputMessageLog(text);
 	} else if (!lstrcmpi(cmd, TEXT("rl"))) {
-		TCHAR text[2048];
-		text[0] = TEXT('\0');
+		std::wstring text;
 		std::vector<RPL_ELEM>::const_iterator it = rplList_.begin();
-		for (int len = 0; it != rplList_.end() && len + _countof(it->comment) + 32 < _countof(text); ++it) {
-			if (it->comment[0] && !lstrcmpi(it->section, TEXT("CustomReplace"))) {
-				len += wsprintf(&text[len], TEXT("%sPattern%d=%s\n"), it->IsEnabled() ? TEXT("") : TEXT("#"), it->key, it->comment);
+		for (; it != rplList_.end(); ++it) {
+			if (!it->comment.empty() && it->section == TEXT("CustomReplace")) {
+				TCHAR key[64];
+				wsprintf(key, TEXT("%sPattern%d="), it->IsEnabled() ? TEXT("") : TEXT("#"), it->key);
+				text += key + it->comment + TEXT('\n');
 			}
 		}
-		MessageBox(hForce_, text, TEXT("NicoJK - ローカルコマンド"), MB_OK);
+		MessageBox(hForce_, text.c_str(), TEXT("NicoJK - ローカルコマンド"), MB_OK);
 	} else if (!lstrcmpi(cmd, TEXT("rr"))) {
 		rplList_.clear();
 		LoadRplListFromIni(TEXT("AutoReplace"), &rplList_);
@@ -1378,12 +1400,12 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		bool bFound = false;
 		std::vector<RPL_ELEM>::iterator it = rplList_.begin();
 		for (; it != rplList_.end(); ++it) {
-			if (it->key / 10 == nArg && !lstrcmpi(it->section, TEXT("CustomReplace"))) {
+			if (it->key / 10 == nArg && it->section == TEXT("CustomReplace")) {
 				bFound = true;
 				it->SetEnabled(cmd[1] == TEXT('a'));
-				TCHAR text[_countof(it->comment) + 64];
-				wsprintf(text, TEXT("Pattern%d(%s)を%c効にしました。"), it->key, it->comment, it->IsEnabled() ? TEXT('有') : TEXT('無'));
-				OutputMessageLog(text);
+				TCHAR key[64];
+				wsprintf(key, TEXT("Pattern%d("), it->key);
+				OutputMessageLog((key + it->comment + TEXT(")を") + (it->IsEnabled() ? TEXT('有') : TEXT('無')) + TEXT("効にしました。")).c_str());
 			}
 		}
 		if (bFound) {
@@ -1482,7 +1504,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			jkLeaveThreadCheck_ = 0;
 			commentServerResponse_[0] = '\0';
 			lastPostComm_[0] = TEXT('\0');
-			bUsingLogfileDriver_ = IsMatchDriverName(s_.logfileDrivers);
+			bUsingLogfileDriver_ = IsMatchDriverName(s_.logfileDrivers.c_str());
 			readLogfileTick_ = GetTickCount();
 			bSpecFile_ = false;
 			dropFileTimeout_ = 0;
@@ -1733,27 +1755,28 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					if (it->marker[0] != TEXT('#') && it->marker[0] != TEXT('.')) {
 						// ユーザーNGの置換パターンをつくる
 						RPL_ELEM e;
-						lstrcpyn(e.section, TEXT("AutoReplace"), _countof(e.section));
+						e.section = TEXT("AutoReplace");
 						// 14文字で切っているのは単に表現を短くするため。深い理由はない
-						wsprintf(e.pattern, TEXT("s/^<chat(?=.*? user_id=\"%.14s%s.*>.*<)/<chat abone=\"1\"/g"),
+						TCHAR pattern[256];
+						wsprintf(pattern, TEXT("s/^<chat(?=.*? user_id=\"%.14s%s.*>.*<)/<chat abone=\"1\"/g"),
 						         it->marker, lstrlen(it->marker) > 14 ? TEXT("") : TEXT("\""));
-						if (e.AssignFromPattern()) {
+						if (e.SetPattern(pattern)) {
 							// 既存パターンかどうか調べる
 							std::vector<RPL_ELEM> autoRplList;
 							LoadRplListFromIni(TEXT("AutoReplace"), &autoRplList);
 							std::vector<RPL_ELEM>::const_iterator jt = autoRplList.begin();
-							for (; jt != autoRplList.end() && lstrcmp(jt->pattern, e.pattern); ++jt);
+							for (; jt != autoRplList.end() && jt->pattern != e.pattern; ++jt);
 							// メッセージボックスで確認
-							TCHAR text[_countof(it->marker) + _countof(it->text) + 32];
-							wsprintf(text, TEXT(">>%d ID:%s\n%s"), it->no, it->marker, it->text);
+							TCHAR header[_countof(it->marker) + 32];
+							wsprintf(header, TEXT(">>%d ID:%s\n"), it->no, it->marker);
 							if (jt != autoRplList.end()) {
-								if (MessageBox(hwnd, text, TEXT("NicoJK - NG【解除】します"), MB_OKCANCEL) == IDOK) {
+								if (MessageBox(hwnd, (header + it->text).c_str(), TEXT("NicoJK - NG【解除】します"), MB_OKCANCEL) == IDOK) {
 									autoRplList.erase(jt);
 									for (int i = 0; i < (int)autoRplList.size(); autoRplList[i].key = i, ++i);
 									SaveRplListToIni(TEXT("AutoReplace"), autoRplList);
 								}
 							} else {
-								if (MessageBox(hwnd, text, TEXT("NicoJK - NG登録します"), MB_OKCANCEL) == IDOK) {
+								if (MessageBox(hwnd, (header + it->text).c_str(), TEXT("NicoJK - NG登録します"), MB_OKCANCEL) == IDOK) {
 									autoRplList.push_back(e);
 									while ((int)autoRplList.size() > max(s_.maxAutoReplace, 0)) {
 										autoRplList.erase(autoRplList.begin());
@@ -1776,7 +1799,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				TCHAR comm[POST_COMMENT_MAX + 32];
 				GetPostComboBoxText(comm, _countof(comm));
 				while (SendDlgItemMessage(hwnd, IDC_CB_POST, CB_DELETESTRING, 0, 0) > 0);
-				for (LPCTSTR p = s_.mailDecorations; *p; ) {
+				for (LPCTSTR p = s_.mailDecorations.c_str(); *p; ) {
 					int len = StrCSpn(p, TEXT(":"));
 					TCHAR text[_countof(comm) + 64];
 					lstrcpyn(text, p, min(len + 1, 64));
@@ -2022,11 +2045,12 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				std::list<LOG_ELEM>::const_iterator it = logList_.end();
 				for (size_t i = logList_.size() - logListDisplayedSize_; i > 0; --i, --it);
 				for (; it != logList_.end(); ++it) {
-					TCHAR text[_countof(it->text) + 96];
-					wsprintf(text, TEXT("%s[%u]{00:00:00 (MMM)}%02d:%02d:%02d (%.3s)%s%s"),
+					TCHAR text[256];
+					int len = wsprintf(text, TEXT("%s[%u]{00:00:00 (MMM)}%02d:%02d:%02d (%.3s)%s"),
 					         it->marker[0] == TEXT('#') ? TEXT("#") : TEXT(""), static_cast<DWORD>(it->cr),
 					         it->st.wHour, it->st.wMinute, it->st.wSecond,
-					         it->marker, TEXT("   ") + min(lstrlen(it->marker), 3), it->text);
+					         it->marker, TEXT("   ") + min(lstrlen(it->marker), 3));
+					lstrcpyn(text + len, it->text.c_str(), _countof(text) - len);
 					ListBox_AddString(hList, text);
 					++logListDisplayedSize_;
 				}

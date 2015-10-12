@@ -8,8 +8,12 @@ public:
 	static const int COMMENT_TRIMEND = 1000;
 	// リストボックスのログ表示の最小描画間隔
 	static const int COMMENT_REDRAW_INTERVAL = 250;
-	// 処理できるchatタグの最大文字数
-	static const int CHAT_TAG_MAX = 2048;
+	// 処理できるchatタグの最大文字数(char)
+	static const int CHAT_TAG_MAX = 4096;
+	// 表示できるコメントの最大文字数
+	static const int CHAT_TEXT_MAX = 2048;
+	// 設定値の最大読み込み文字数
+	static const int SETTING_VALUE_MAX = 8192;
 	// 勢いリストを更新する間隔(あんまり短くしちゃダメ!)
 	static const int UPDATE_FORCE_INTERVAL = 20000;
 	// コメントサーバ切断をチェックして再接続する間隔(あんまり短くしちゃダメ!)
@@ -29,7 +33,6 @@ public:
 	bool Finalize();
 private:
 	struct SETTINGS {
-		// memset()するためフィールドはすべてPOD型でなければならない
 		int hideForceWindow;
 		int forceFontSize;
 		TCHAR forceFontName[LF_FACESIZE];
@@ -47,11 +50,11 @@ private:
 		int commentDuration;
 		int commentDrawLineCount;
 		int logfileMode;
-		TCHAR logfileDrivers[512];
-		TCHAR nonTunerDrivers[512];
+		std::wstring logfileDrivers;
+		std::wstring nonTunerDrivers;
 		TCHAR logfileFolder[MAX_PATH];
-		TCHAR execGetCookie[1024];
-		TCHAR mailDecorations[1024];
+		std::wstring execGetCookie;
+		std::wstring mailDecorations;
 		bool bAnonymity;
 		bool bUseOsdCompositor;
 		bool bUseTexture;
@@ -60,7 +63,7 @@ private:
 		bool bShowRadio;
 		bool bDoHalfClose;
 		int maxAutoReplace;
-		TCHAR abone[CCommentWindow::CHAT_TEXT_MAX];
+		std::wstring abone;
 		int dropLogfileMode;
 		int defaultPlaybackDelay;
 		int forwardList[26];
@@ -73,29 +76,24 @@ private:
 		int jkID;
 		int force;
 		TCHAR name[64];
-		FORCE_ELEM() {}
 	};
 	struct LOG_ELEM {
 		SYSTEMTIME st;
 		int no;
 		COLORREF cr;
 		TCHAR marker[28];
-		TCHAR text[CCommentWindow::CHAT_TEXT_MAX];
-		LOG_ELEM() {}
+		std::wstring text;
 	};
 	struct RPL_ELEM {
 		int key;
-		TCHAR section[32];
-		TCHAR comment[32];
-		TCHAR pattern[512];
+		std::wstring section;
+		std::wstring comment;
+		std::wstring pattern;
 		std::regex re;
 		std::string fmt;
-		RPL_ELEM() : key(0) {
-			section[0] = comment[0] = pattern[0] = TEXT('\0');
-		}
-		bool IsEnabled() const { return IsCharUpper(pattern[0]) == FALSE; }
-		void SetEnabled(bool b) { pattern[0] = b ? (TCHAR)CharLower((LPTSTR)pattern[0]) : (TCHAR)CharUpper((LPTSTR)pattern[0]); }
-		bool AssignFromPattern();
+		bool IsEnabled() const { return !pattern.empty() && TEXT('a') <= pattern[0] && pattern[0] <= TEXT('z'); }
+		void SetEnabled(bool b);
+		bool SetPattern(LPCTSTR patt);
 		struct COMPARE {
 			bool operator()(const RPL_ELEM &l, const RPL_ELEM &r) { return l.key < r.key; }
 		};

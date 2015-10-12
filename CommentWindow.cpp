@@ -378,12 +378,12 @@ void CCommentWindow::AddChat(LPCTSTR text, COLORREF color, CHAT_POSITION positio
 		c.bSmall = size != CHAT_SIZE_DEFAULT;
 		c.alignFactor = position==CHAT_POS_DEFAULT || align==CHAT_ALIGN_LEFT ? 0 : align==CHAT_ALIGN_RIGHT ? 2 : 1;
 		c.bInsertLast = position!=CHAT_POS_DEFAULT && bInsertLast;
-		lstrcpyn(c.text, text, _countof(c.text));
-		c.bMultiLine = StrChr(c.text, TEXT('\n')) != NULL;
+		c.text = text;
+		c.bMultiLine = c.text.find(TEXT('\n')) != std::wstring::npos;
 		c.bDrew = false;
 		// 一時リストに追加(描画時にchatList_にマージ)
 		CBlockLock lock(&chatLock_);
-		chatPoolList_.push_back(c);
+		chatPoolList_.push_back(std::move(c));
 	}
 }
 
@@ -687,12 +687,12 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 
 		// 新しいコメントがあれば重ならないようにリストを再配置する
 		while (!chatPoolList_.empty()) {
-			CHAT c = chatPoolList_.front();
+			CHAT c = std::move(chatPoolList_.front());
 			chatPoolList_.pop_front();
 			// 実際の描画サイズを計測
 			const Gdiplus::Font *pFont = c.bMultiLine ? &(c.bSmall ? fontMultiSmall : fontMulti) : &(c.bSmall ? fontSmall : font);
 			Gdiplus::RectF rcDraw;
-			if (g.MeasureString(c.text, -1, pFont, Gdiplus::PointF(0, 0), &rcDraw) != Gdiplus::Ok) {
+			if (g.MeasureString(c.text.c_str(), -1, pFont, Gdiplus::PointF(0, 0), &rcDraw) != Gdiplus::Ok) {
 				continue;
 			}
 			c.currentDrawWidth = (int)rcDraw.Width;
@@ -773,7 +773,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					}
 				}
 			}
-			chatList_.insert(it, c);
+			chatList_.insert(it, std::move(c));
 		}
 
 		// End CBlockLock
@@ -805,7 +805,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 			if (currentWindowWidth_ < 0) {
 				// 実際の描画サイズを計測
 				Gdiplus::RectF rcDraw;
-				if (g.MeasureString(it->text, -1, pFont, Gdiplus::PointF(0, 0), &rcDraw) == Gdiplus::Ok) {
+				if (g.MeasureString(it->text.c_str(), -1, pFont, Gdiplus::PointF(0, 0), &rcDraw) == Gdiplus::Ok) {
 					it->currentDrawWidth = (int)rcDraw.Width;
 					it->currentDrawHeight = (int)rcDraw.Height;
 				}
@@ -882,7 +882,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					SetRect(&t.rc, minPos.x, minPos.y, minPos.x + entireDrawWith, minPos.y + entireDrawHeight);
 					t.color = it->color;
 					t.bSmall = it->bSmall;
-					lstrcpy(t.text, it->text);
+					t.text = it->text;
 					pgTexture_->SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
 					pgTexture_->SetSmoothingMode(Gdiplus::SmoothingModeNone);
 					if (bOpaque) {
@@ -897,7 +897,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					Gdiplus::PointF pt((Gdiplus::REAL)t.rc.left, (Gdiplus::REAL)t.rc.top);
 					if (fontOutline_) {
 						grPath.Reset();
-						grPath.AddString(t.text, -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
+						grPath.AddString(t.text.c_str(), -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
 						                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), NULL);
 						pgTexture_->SetCompositingMode(bOpaque ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						pgTexture_->SetSmoothingMode(bAntiAlias_ ? Gdiplus::SmoothingModeHighQuality : Gdiplus::SmoothingModeNone);
@@ -912,11 +912,11 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 						pgTexture_->SetCompositingMode(bOpaque || !bAntiAlias_ && bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						Gdiplus::SolidBrush brShadow(shadowColor);
 						// Win7においてU+2588の上端1ピクセルはみ出す現象がみられたため+1
-						pgTexture_->DrawString(t.text, -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
+						pgTexture_->DrawString(t.text.c_str(), -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
 						pgTexture_->SetCompositingMode(bAntiAlias_ || bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
-						pgTexture_->DrawString(t.text, -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
+						pgTexture_->DrawString(t.text.c_str(), -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
 					}
-					jt = textureList_.insert(jtMin, t);
+					jt = textureList_.insert(jtMin, std::move(t));
 				}
 			}
 			int px, py = (int)((0.5 + actLine) * height / actLineCount - (pFont->GetHeight(96) + shadowOffset) / 2);
@@ -942,7 +942,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 				Gdiplus::PointF pt((Gdiplus::REAL)px, (Gdiplus::REAL)py);
 				if (fontOutline_) {
 					grPath.Reset();
-					grPath.AddString(it->text, -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
+					grPath.AddString(it->text.c_str(), -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
 					                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), NULL);
 					g.SetCompositingMode(bAntiAlias_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 					g.SetSmoothingMode(bAntiAlias_ ? Gdiplus::SmoothingModeHighQuality : Gdiplus::SmoothingModeNone);
@@ -953,8 +953,8 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 				} else {
 					g.SetCompositingMode(bAntiAlias_ || bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 					Gdiplus::SolidBrush brShadow(shadowColor);
-					g.DrawString(it->text, -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
-					g.DrawString(it->text, -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
+					g.DrawString(it->text.c_str(), -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
+					g.DrawString(it->text.c_str(), -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
 				}
 			}
 

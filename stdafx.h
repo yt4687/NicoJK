@@ -27,6 +27,7 @@
 #include <vector>
 #include <list>
 #include <regex>
+#include <utility>
 #include <tchar.h>
 #include <dwmapi.h>
 #include <CommDlg.h>
