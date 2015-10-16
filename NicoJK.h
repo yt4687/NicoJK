@@ -71,6 +71,7 @@ private:
 		int forceOpacity;
 		int commentOpacity;
 		bool bSetRelative;
+		bool bUsePanel;
 	};
 	struct FORCE_ELEM {
 		int jkID;
@@ -119,6 +120,7 @@ private:
 	void OutputMessageLog(LPCTSTR text);
 	void GetPostComboBoxText(LPTSTR comm, int commSize, LPTSTR mail = NULL, int mailSize = 0);
 	void ProcessLocalPost(LPCTSTR comm);
+	static LRESULT CALLBACK PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	bool CreateForceWindowItems(HWND hwnd);
 	LRESULT ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -133,6 +135,7 @@ private:
 	bool bDragAcceptFiles_;
 
 	// 勢い窓
+	HWND hPanel_;
 	HWND hForce_;
 	HFONT hForceFont_;
 	bool bDisplayLogList_;

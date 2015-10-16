@@ -98,6 +98,7 @@ bool CNicoJK::RPL_ELEM::SetPattern(LPCTSTR patt)
 
 CNicoJK::CNicoJK()
 	: bDragAcceptFiles_(false)
+	, hPanel_(NULL)
 	, hForce_(NULL)
 	, hForceFont_(NULL)
 	, bDisplayLogList_(false)
@@ -168,6 +169,15 @@ bool CNicoJK::GetPluginInfo(TVTest::PluginInfo *pInfo)
 bool CNicoJK::Initialize()
 {
 	// ウィンドウクラスを登録
+	WNDCLASSEX wcPanel = {};
+	wcPanel.cbSize = sizeof(wcPanel);
+	wcPanel.style = 0;
+	wcPanel.lpfnWndProc = PanelWindowProc;
+	wcPanel.hInstance = g_hinstDLL;
+	wcPanel.lpszClassName = TEXT("ru.jk.panel");
+	if (RegisterClassEx(&wcPanel) == 0) {
+		return false;
+	}
 	WNDCLASSEX wc = {};
 	wc.cbSize = sizeof(wc);
 	wc.style = CS_VREDRAW | CS_HREDRAW;
@@ -213,6 +223,20 @@ bool CNicoJK::Initialize()
 	// アイコンを登録
 	m_pApp->RegisterPluginIconFromResource(g_hinstDLL, MAKEINTRESOURCE(IDB_ICON));
 
+	// パネル項目を登録
+	s_.bUsePanel = GetPrivateProfileInt(TEXT("Setting"), TEXT("usePanel"), 1, szIniFileName_) != 0;
+	if (s_.bUsePanel) {
+		TVTest::PanelItemInfo pi;
+		pi.Size = sizeof(pi);
+		pi.Flags = 0;
+		pi.Style = TVTest::PANEL_ITEM_STYLE_NEEDFOCUS;
+		pi.ID = 1;
+		pi.pszIDText = L"NicoJK";
+		pi.pszTitle = L"NicoJK";
+		pi.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(IDB_ICON), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
+		s_.bUsePanel = m_pApp->RegisterPanelItem(&pi);
+		DeleteObject(pi.hbmIcon);
+	}
 	// コマンドを登録
 	TVTest::PluginCommandInfo ci;
 	ci.Size = sizeof(ci);
@@ -223,7 +247,7 @@ bool CNicoJK::Initialize()
 	ci.pszText = L"HideForce";
 	ci.pszDescription = ci.pszName = L"勢いウィンドウの表示切替";
 	ci.hbmIcon = static_cast<HBITMAP>(LoadImage(g_hinstDLL, MAKEINTRESOURCE(bSmallIcon ? IDB_FORCE16 : IDB_FORCE), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
-	if (!m_pApp->RegisterPluginCommand(&ci)) {
+	if (!s_.bUsePanel && !m_pApp->RegisterPluginCommand(&ci)) {
 		m_pApp->RegisterCommand(ci.ID, ci.pszText, ci.pszName);
 	}
 	DeleteObject(ci.hbmIcon);
@@ -256,6 +280,10 @@ bool CNicoJK::Finalize()
 {
 	// 終了処理
 	TogglePlugin(false);
+	// パネルウィンドウを破棄
+	if (hPanel_) {
+		DestroyWindow(hPanel_);
+	}
 	// 本体や他プラグインとの干渉を防ぐため、一旦有効にしたD&Dは最後まで維持する
 	if (bDragAcceptFiles_) {
 		DragAcceptFiles(m_pApp->GetAppWindow(), FALSE);
@@ -269,7 +297,7 @@ bool CNicoJK::Finalize()
 bool CNicoJK::TogglePlugin(bool bEnabled)
 {
 	if (bEnabled) {
-		if (!hForce_) {
+		if ((!s_.bUsePanel || hPanel_) && !hForce_) {
 			LoadFromIni();
 			// ネットワーク未接続でもログフォルダにあるチャンネルを勢い窓に表示できるようにするため
 			forceList_.clear();
@@ -340,9 +368,14 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			}
 
 			// 勢い窓作成
-			hForce_ = CreateWindowEx(WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
-			                         WS_CAPTION | WS_POPUP | WS_THICKFRAME | WS_SYSMENU,
-			                         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, NULL, NULL, g_hinstDLL, this);
+			if (hPanel_) {
+				hForce_ = CreateWindowEx(0, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
+				                         WS_CHILD, 0, 0, 320, 240, hPanel_, NULL, g_hinstDLL, this);
+			} else {
+				hForce_ = CreateWindowEx(WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
+				                         WS_CAPTION | WS_POPUP | WS_THICKFRAME | WS_SYSMENU,
+				                         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, NULL, NULL, g_hinstDLL, this);
+			}
 			if (hForce_) {
 				// ウィンドウコールバック関数を登録
 				m_pApp->SetWindowMessageCallback(WindowMsgCallback, this);
@@ -932,7 +965,41 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 	switch (Event) {
 	case TVTest::EVENT_PLUGINENABLE:
 		// プラグインの有効状態が変化した
-		return pThis->TogglePlugin(lParam1 != 0);
+		{
+			pThis->TogglePlugin(lParam1 != 0);
+			// パネルの有効状態は(hForce_の有無にかかわらず)常にTVTestのプラグイン状態フラグに合わせる
+			TVTest::PanelItemSetInfo psi;
+			psi.Size = sizeof(psi);
+			psi.Mask = TVTest::PANEL_ITEM_SET_INFO_MASK_STATE;
+			psi.ID = 1;
+			psi.StateMask = TVTest::PANEL_ITEM_STATE_ENABLED | (pThis->hPanel_ ? TVTest::PANEL_ITEM_STATE_ACTIVE : 0);
+			psi.State = lParam1 ? psi.StateMask : 0;
+			pThis->m_pApp->SetPanelItem(&psi);
+		}
+		return TRUE;
+	case TVTest::EVENT_PANELITEM_NOTIFY:
+		// パネル項目の通知
+		{
+			TVTest::PanelItemEventInfo *pei = reinterpret_cast<TVTest::PanelItemEventInfo*>(lParam1);
+			switch (pei->Event) {
+			case TVTest::PANEL_ITEM_EVENT_CREATE:
+				{
+					TVTest::PanelItemCreateEventInfo *pcei = reinterpret_cast<TVTest::PanelItemCreateEventInfo*>(lParam1);
+					pThis->hPanel_ = CreateWindowEx(0, TEXT("ru.jk.panel"), NULL, WS_CHILD | WS_VISIBLE,
+					                                pcei->ItemRect.left, pcei->ItemRect.top,
+					                                pcei->ItemRect.right - pcei->ItemRect.left, pcei->ItemRect.bottom - pcei->ItemRect.top,
+					                                pcei->hwndParent, NULL, g_hinstDLL, pThis);
+					if (pThis->hPanel_) {
+						pcei->hwndItem = pThis->hPanel_;
+						// このイベントはTVTest::EVENT_PLUGINENABLEよりも遅れるため
+						pThis->TogglePlugin(pThis->m_pApp->IsPluginEnabled());
+						return TRUE;
+					}
+				}
+				return FALSE;
+			}
+		}
+		break;
 	case TVTest::EVENT_RECORDSTATUSCHANGE:
 		// 録画状態が変化した
 		pThis->bRecording_ = lParam1 != TVTest::RECORD_STATUS_NOTRECORDING;
@@ -1429,6 +1496,51 @@ static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
 
+LRESULT CALLBACK CNicoJK::PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	if (uMsg == WM_CREATE) {
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
+	}
+	CNicoJK *pThis = reinterpret_cast<CNicoJK*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	if (pThis) {
+		switch (uMsg) {
+		case WM_CREATE:
+			SetProp(hwnd, TEXT("IsHide"), reinterpret_cast<HANDLE>('N'));
+			SetTimer(hwnd, 1, 5000, NULL);
+			return TRUE;
+		case WM_DESTROY:
+			RemoveProp(hwnd, TEXT("IsHide"));
+			pThis->hPanel_ = NULL;
+			break;
+		case WM_TIMER:
+			if (wParam == 1) {
+				// パネルの表示非表示を捕捉する手段が思いつかないので苦肉の策
+				bool bHide = pThis->hForce_ && !IsWindowVisible(pThis->hForce_);
+				if (!bHide && GetProp(hwnd, TEXT("IsHide")) == reinterpret_cast<HANDLE>('Y')) {
+					SetProp(hwnd, TEXT("IsHide"), reinterpret_cast<HANDLE>('N'));
+					if (pThis->hForce_) {
+						SendMessage(pThis->hForce_, WM_UPDATE_LIST, TRUE, 0);
+						PostMessage(pThis->hForce_, WM_TIMER, TIMER_UPDATE, 0);
+						OutputDebugString(TEXT("OK\r\n"));
+					}
+				} else if (bHide && GetProp(hwnd, TEXT("IsHide")) == reinterpret_cast<HANDLE>('N')) {
+					SetProp(hwnd, TEXT("IsHide"), reinterpret_cast<HANDLE>('Y'));
+				}
+			}
+			break;
+		case WM_SIZE:
+			if (pThis->hForce_) {
+				MoveWindow(pThis->hForce_, 0, 0, LOWORD(lParam), HIWORD(lParam), TRUE);
+			}
+			break;
+		default:
+			PostMessage(hwnd, WM_TIMER, 1, 0);
+			break;
+		}
+	}
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
 LRESULT CALLBACK CNicoJK::ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (uMsg == WM_CREATE) {
@@ -1521,14 +1633,19 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SetTimer(hwnd, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
 			PostMessage(hwnd, WM_TIMER, TIMER_UPDATE, 0);
 			PostMessage(hwnd, WM_TIMER, TIMER_JK_WATCHDOG, 0);
-			// 位置を復元
-			HMONITOR hMon = MonitorFromRect(&s_.rcForce, MONITOR_DEFAULTTONEAREST);
-			MONITORINFO mi;
-			mi.cbSize = sizeof(MONITORINFO);
-			if (s_.rcForce.right <= s_.rcForce.left || !GetMonitorInfo(hMon, &mi) ||
-			    s_.rcForce.right < mi.rcMonitor.left + 20 || mi.rcMonitor.right - 20 < s_.rcForce.left ||
-			    s_.rcForce.bottom < mi.rcMonitor.top + 20 || mi.rcMonitor.bottom - 20 < s_.rcForce.top) {
-				GetWindowRect(hwnd, &s_.rcForce);
+			if (hPanel_) {
+				// パネルウィンドウに連動
+				GetClientRect(hPanel_, &s_.rcForce);
+			} else {
+				// 位置を復元
+				HMONITOR hMon = MonitorFromRect(&s_.rcForce, MONITOR_DEFAULTTONEAREST);
+				MONITORINFO mi;
+				mi.cbSize = sizeof(MONITORINFO);
+				if (s_.rcForce.right <= s_.rcForce.left || !GetMonitorInfo(hMon, &mi) ||
+				    s_.rcForce.right < mi.rcMonitor.left + 20 || mi.rcMonitor.right - 20 < s_.rcForce.left ||
+				    s_.rcForce.bottom < mi.rcMonitor.top + 20 || mi.rcMonitor.bottom - 20 < s_.rcForce.top) {
+					GetWindowRect(hwnd, &s_.rcForce);
+				}
 			}
 			MoveWindow(hwnd, 0, 0, 64, 64, FALSE);
 			MoveWindow(hwnd, s_.rcForce.left, s_.rcForce.top, s_.rcForce.right - s_.rcForce.left, s_.rcForce.bottom - s_.rcForce.top, FALSE);
@@ -1538,7 +1655,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SetLayeredWindowAttributes(hwnd, 0, static_cast<BYTE>(s_.forceOpacity), LWA_ALPHA);
 
 			m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, 0);
-			if ((s_.hideForceWindow & 1) == 0) {
+			if (hPanel_ || (s_.hideForceWindow & 1) == 0) {
 				ShowWindow(hwnd, SW_SHOWNA);
 				SendMessage(hwnd, WM_SET_ZORDER, 0, 0);
 			}
