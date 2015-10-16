@@ -255,9 +255,7 @@ bool CNicoJK::Initialize()
 bool CNicoJK::Finalize()
 {
 	// 終了処理
-	if (m_pApp->IsPluginEnabled()) {
-		TogglePlugin(false);
-	}
+	TogglePlugin(false);
 	// 本体や他プラグインとの干渉を防ぐため、一旦有効にしたD&Dは最後まで維持する
 	if (bDragAcceptFiles_) {
 		DragAcceptFiles(m_pApp->GetAppWindow(), FALSE);
@@ -331,13 +329,15 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 				}
 			}
 			// 破棄のタイミングがややこしいので勢い窓のフォントはここで作る
-			LOGFONT lf = {0};
-			HDC hdc = GetDC(NULL);
-			lf.lfHeight = -(s_.forceFontSize * GetDeviceCaps(hdc, LOGPIXELSY) / 72);
-			ReleaseDC(NULL, hdc);
-			lf.lfCharSet = SHIFTJIS_CHARSET;
-			lstrcpy(lf.lfFaceName, s_.forceFontName);
-			hForceFont_ = CreateFontIndirect(&lf);
+			if (!hForceFont_) {
+				LOGFONT lf = {};
+				HDC hdc = GetDC(NULL);
+				lf.lfHeight = -(s_.forceFontSize * GetDeviceCaps(hdc, LOGPIXELSY) / 72);
+				ReleaseDC(NULL, hdc);
+				lf.lfCharSet = SHIFTJIS_CHARSET;
+				lstrcpy(lf.lfFaceName, s_.forceFontName);
+				hForceFont_ = CreateFontIndirect(&lf);
+			}
 
 			// 勢い窓作成
 			hForce_ = CreateWindowEx(WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
@@ -375,24 +375,12 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 		return hForce_ != NULL;
 	} else {
 		if (hForce_) {
-			if (hSyncThread_) {
-				bQuitSyncThread_ = true;
-				WaitForSingleObject(hSyncThread_, INFINITE);
-				CloseHandle(hSyncThread_);
-				hSyncThread_ = NULL;
-			}
-			ToggleStreamCallback(false);
-			m_pApp->SetWindowMessageCallback(NULL);
 			DestroyWindow(hForce_);
-			hForce_ = NULL;
-			SaveToIni();
 		}
 		if (hForceFont_) {
 			DeleteFont(hForceFont_);
 			hForceFont_ = NULL;
 		}
-		m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
-		m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
 		return true;
 	}
 }
@@ -951,7 +939,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		break;
 	case TVTest::EVENT_FULLSCREENCHANGE:
 		// 全画面表示状態が変化した
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			// オーナーが変わるのでコメントウィンドウを作りなおす
 			pThis->commentWindow_.Destroy();
 			if (pThis->commentWindow_.GetOpacity() != 0 && pThis->m_pApp->GetPreview()) {
@@ -967,7 +955,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		break;
 	case TVTest::EVENT_PREVIEWCHANGE:
 		// プレビュー表示状態が変化した
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			if (pThis->commentWindow_.GetOpacity() != 0 && lParam1 != 0) {
 				HWND hwnd = pThis->FindVideoContainer();
 				pThis->commentWindow_.Create(hwnd);
@@ -980,26 +968,26 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		break;
 	case TVTest::EVENT_DRIVERCHANGE:
 		// ドライバが変更された
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			pThis->bUsingLogfileDriver_ = pThis->IsMatchDriverName(pThis->s_.logfileDrivers.c_str());
 		}
 		// FALL THROUGH!
 	case TVTest::EVENT_CHANNELCHANGE:
 		// チャンネルが変更された
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			PostMessage(pThis->hForce_, WM_RESET_STREAM, 0, 0);
 		}
 		// FALL THROUGH!
 	case TVTest::EVENT_SERVICECHANGE:
 		// サービスが変更された
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			// 重複やザッピング対策のためタイマで呼ぶ
 			SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
 		}
 		break;
 	case TVTest::EVENT_SERVICEUPDATE:
 		// サービスの構成が変化した(再生ファイルを切り替えたときなど)
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			// ユーザの自発的なチャンネル変更(EVENT_CHANNELCHANGE)を捉えるのが原則だが
 			// 非チューナ系のBonDriverだとこれでは不十分なため
 			if (pThis->IsMatchDriverName(pThis->s_.nonTunerDrivers.c_str())) {
@@ -1009,7 +997,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		break;
 	case TVTest::EVENT_COMMAND:
 		// コマンドが選択された
-		if (pThis->m_pApp->IsPluginEnabled()) {
+		if (pThis->hForce_) {
 			switch (lParam1) {
 			case COMMAND_HIDE_FORCE:
 				if (IsWindowVisible(pThis->hForce_)) {
@@ -1601,6 +1589,19 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			channelSocket_.Close();
 			jkSocket_.Close();
 			postSocket_.Close();
+
+			if (hSyncThread_) {
+				bQuitSyncThread_ = true;
+				WaitForSingleObject(hSyncThread_, INFINITE);
+				CloseHandle(hSyncThread_);
+				hSyncThread_ = NULL;
+			}
+			ToggleStreamCallback(false);
+			m_pApp->SetWindowMessageCallback(NULL);
+			SaveToIni();
+			m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
+			m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
+			hForce_ = NULL;
 		}
 		break;
 	case WM_MEASUREITEM:
