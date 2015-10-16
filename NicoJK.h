@@ -120,8 +120,9 @@ private:
 	void OutputMessageLog(LPCTSTR text);
 	void GetPostComboBoxText(LPTSTR comm, int commSize, LPTSTR mail = NULL, int mailSize = 0);
 	void ProcessLocalPost(LPCTSTR comm);
-	static INT_PTR CALLBACK ForceDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-	INT_PTR ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	bool CreateForceWindowItems(HWND hwnd);
+	LRESULT ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static BOOL CALLBACK StreamCallback(BYTE *pData, void *pClientData);
 
 	// 設定ファイルの名前(Shlwapi使うのでMAX_PATHより大きくしても意味がない)

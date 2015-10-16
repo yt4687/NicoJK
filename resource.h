@@ -2,7 +2,6 @@
 #define IDC_STATIC (-1)
 #endif
 
-#define IDD_FORCE                               101
 #define IDB_ICON                                110
 #define IDB_FORCE                               112
 #define IDB_FORCE16                             113

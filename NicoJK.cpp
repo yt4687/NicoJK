@@ -168,6 +168,17 @@ bool CNicoJK::GetPluginInfo(TVTest::PluginInfo *pInfo)
 
 bool CNicoJK::Initialize()
 {
+	// ウィンドウクラスを登録
+	WNDCLASSEX wc = {};
+	wc.cbSize = sizeof(wc);
+	wc.style = CS_VREDRAW | CS_HREDRAW;
+	wc.lpfnWndProc = ForceWindowProc;
+	wc.hInstance = g_hinstDLL;
+	wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+	wc.lpszClassName = TEXT("ru.jk.force");
+	if (RegisterClassEx(&wc) == 0) {
+		return false;
+	}
 	// 初期化処理
 	if (!GetLongModuleFileName(g_hinstDLL, szIniFileName_, _countof(szIniFileName_)) ||
 	    !PathRenameExtension(szIniFileName_, TEXT(".ini"))) {
@@ -330,8 +341,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			hForceFont_ = CreateFontIndirect(&lf);
 
 			// 勢い窓作成
-			hForce_ = CreateDialogParam(g_hinstDLL, MAKEINTRESOURCE(IDD_FORCE), NULL,
-			                            ForceDialogProc, reinterpret_cast<LPARAM>(this));
+			hForce_ = CreateWindowEx(WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
+			                         WS_CAPTION | WS_POPUP | WS_THICKFRAME | WS_SYSMENU,
+			                         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, NULL, NULL, g_hinstDLL, this);
 			if (hForce_) {
 				// ウィンドウコールバック関数を登録
 				m_pApp->SetWindowMessageCallback(WindowMsgCallback, this);
@@ -1444,40 +1456,50 @@ static LRESULT CALLBACK ForceListBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
 
-INT_PTR CALLBACK CNicoJK::ForceDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK CNicoJK::ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if (uMsg == WM_MEASUREITEM) {
-		// WM_INITDIALOGの前に呼ばれる
-		LPMEASUREITEMSTRUCT lpmis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
-		if (lpmis->CtlID == IDC_FORCELIST) {
-			CNicoJK *pThis = dynamic_cast<CNicoJK*>(g_pPlugin);
-			if (pThis && pThis->hForceFont_) {
-				HWND hItem = GetDlgItem(hwnd, IDC_FORCELIST);
-				HDC hdc = GetDC(hItem);
-				HFONT hFontOld = SelectFont(hdc, pThis->hForceFont_);
-				TEXTMETRIC tm;
-				GetTextMetrics(hdc, &tm);
-				SelectFont(hdc, hFontOld);
-				ReleaseDC(hItem, hdc);
-				lpmis->itemHeight = tm.tmHeight + 1;
-				SetWindowLongPtr(hwnd, DWLP_MSGRESULT, TRUE);
-				return TRUE;
-			}
-		}
-		return FALSE;
+	if (uMsg == WM_CREATE) {
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
 	}
-	if (uMsg == WM_INITDIALOG) {
-		SetWindowLongPtr(hwnd, DWLP_USER, lParam);
-	}
-	CNicoJK *pThis = reinterpret_cast<CNicoJK*>(GetWindowLongPtr(hwnd, DWLP_USER));
-	return pThis ? pThis->ForceDialogProcMain(hwnd, uMsg, wParam, lParam) : FALSE;
+	CNicoJK *pThis = reinterpret_cast<CNicoJK*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	return pThis ? pThis->ForceWindowProcMain(hwnd, uMsg, wParam, lParam) : DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+bool CNicoJK::CreateForceWindowItems(HWND hwnd)
+{
+	if (CreateWindowEx(0, TEXT("BUTTON"), TEXT("勢い"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
+	        4, 4, 68, 26, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_FORCE), g_hinstDLL, NULL) &&
+	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("ログ"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
+	        74, 4, 68, 26, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_LOG), g_hinstDLL, NULL) &&
+	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("File"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+	        148, 10, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_SPECFILE), g_hinstDLL, NULL) &&
+	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("Rel"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+	        200, 10, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_RELATIVE), g_hinstDLL, NULL) &&
+	    CreateWindowEx(0, TRACKBAR_CLASS, TEXT("不透明度"), WS_CHILD | WS_VISIBLE | TBS_BOTH | TBS_NOTICKS | TBS_TOOLTIPS,
+	        252, 10, 64, 21, hwnd, reinterpret_cast<HMENU>(IDC_SLIDER_OPACITY), g_hinstDLL, NULL) &&
+	    CreateWindowEx(WS_EX_ACCEPTFILES, TEXT("LISTBOX"), NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_NOINTEGRALHEIGHT | LBS_HASSTRINGS | LBS_OWNERDRAWFIXED | LBS_NOTIFY,
+	        4, 32, 100, 100, hwnd, reinterpret_cast<HMENU>(IDC_FORCELIST), g_hinstDLL, NULL) &&
+	    CreateWindowEx(0, TEXT("COMBOBOX"), NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS,
+	        4, 100, 100, 50, hwnd, reinterpret_cast<HMENU>(IDC_CB_POST), g_hinstDLL, NULL))
+	{
+		if (hForceFont_) {
+			SendDlgItemMessage(hwnd, IDC_RADIO_FORCE, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+			SendDlgItemMessage(hwnd, IDC_RADIO_LOG, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+			SendDlgItemMessage(hwnd, IDC_CHECK_SPECFILE, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+			SendDlgItemMessage(hwnd, IDC_CHECK_RELATIVE, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+			SendDlgItemMessage(hwnd, IDC_FORCELIST, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+			SendDlgItemMessage(hwnd, IDC_CB_POST, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
+		}
+		return true;
+	}
+	return false;
+}
+
+LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg) {
-	case WM_INITDIALOG:
-		{
+	case WM_CREATE:
+		if (CreateForceWindowItems(hwnd)) {
 			logList_.clear();
 			logListDisplayedSize_ = 0;
 			bPendingTimerUpdateList_ = false;
@@ -1514,10 +1536,6 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			jkSocket_.SetDoHalfClose(s_.bDoHalfClose);
 			postSocket_.SetDoHalfClose(s_.bDoHalfClose);
 
-			if (hForceFont_) {
-				SendDlgItemMessage(hwnd, IDC_FORCELIST, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
-				SendDlgItemMessage(hwnd, IDC_CB_POST, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
-			}
 			SendDlgItemMessage(hwnd, bDisplayLogList_ ? IDC_RADIO_LOG : IDC_RADIO_FORCE, BM_SETCHECK, BST_CHECKED, 0);
 			SendDlgItemMessage(hwnd, IDC_CHECK_RELATIVE, BM_SETCHECK, s_.bSetRelative ? BST_CHECKED : BST_UNCHECKED, 0);
 			SendDlgItemMessage(hwnd, IDC_SLIDER_OPACITY, TBM_SETRANGE, TRUE, MAKELPARAM(0, 10));
@@ -1558,8 +1576,9 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			HWND hList = GetDlgItem(hwnd, IDC_FORCELIST);
 			SetProp(hList, TEXT("DefProc"), reinterpret_cast<HANDLE>(GetWindowLongPtr(hList, GWLP_WNDPROC)));
 			SetWindowLongPtr(hList, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ForceListBoxProc));
+			return TRUE;
 		}
-		return TRUE;
+		return FALSE;
 	case WM_DESTROY:
 		{
 			// 勢いリストのサブクラス化を解除
@@ -1582,7 +1601,27 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			jkSocket_.Close();
 			postSocket_.Close();
 		}
-		return FALSE;
+		break;
+	case WM_MEASUREITEM:
+		{
+			LPMEASUREITEMSTRUCT lpmis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
+			if (lpmis->CtlID == IDC_FORCELIST && hForceFont_) {
+				HWND hItem = GetDlgItem(hwnd, IDC_FORCELIST);
+				HDC hdc = GetDC(hItem);
+				HFONT hFontOld = SelectFont(hdc, hForceFont_);
+				TEXTMETRIC tm;
+				GetTextMetrics(hdc, &tm);
+				SelectFont(hdc, hFontOld);
+				ReleaseDC(hItem, hdc);
+				lpmis->itemHeight = tm.tmHeight + 1;
+				return TRUE;
+			}
+		}
+		break;
+	case WM_CLOSE:
+		// 隠すだけ
+		ShowWindow(hwnd, SW_HIDE);
+		return 0;
 	case WM_DROPFILES:
 		dropFileTimeout_ = 0;
 		if (DragQueryFile(reinterpret_cast<HDROP>(wParam), 0, dropFileName_, _countof(dropFileName_))) {
@@ -1674,7 +1713,6 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						SetBkMode(lpdis->hDC, oldBkMode);
 					}
 				}
-				SetWindowLongPtr(hwnd, DWLP_MSGRESULT, TRUE);
 				return TRUE;
 			}
 		}
@@ -1816,12 +1854,6 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				}
 			}
 			break;
-		case IDOK:
-		case IDCANCEL:
-			// 隠すだけ
-			ShowWindow(hwnd, SW_HIDE);
-			SetWindowLongPtr(hwnd, DWLP_MSGRESULT, 0);
-			return TRUE;
 		}
 		break;
 	case WM_TIMER:
@@ -2399,7 +2431,7 @@ INT_PTR CNicoJK::ForceDialogProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		}
 		break;
 	}
-	return FALSE;
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 // ストリームコールバック(別スレッド)
