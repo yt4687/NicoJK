@@ -99,7 +99,6 @@ private:
 		};
 	};
 	bool TogglePlugin(bool bEnabled);
-	static LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam);
 	void ToggleStreamCallback(bool bSet);
 	static unsigned int __stdcall SyncThread(void *pParam);
 	void LoadFromIni();
@@ -136,7 +135,6 @@ private:
 	// 勢い窓
 	HWND hForce_;
 	HFONT hForceFont_;
-	HHOOK hKeyboardHook_;
 	bool bDisplayLogList_;
 	std::vector<FORCE_ELEM> forceList_;
 	std::list<LOG_ELEM> logList_;

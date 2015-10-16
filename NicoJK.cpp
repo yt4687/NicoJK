@@ -100,7 +100,6 @@ CNicoJK::CNicoJK()
 	: bDragAcceptFiles_(false)
 	, hForce_(NULL)
 	, hForceFont_(NULL)
-	, hKeyboardHook_(NULL)
 	, bDisplayLogList_(false)
 	, logListDisplayedSize_(0)
 	, bPendingTimerUpdateList_(false)
@@ -349,8 +348,6 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 				m_pApp->SetWindowMessageCallback(WindowMsgCallback, this);
 				// ストリームコールバック関数を登録(指定ファイル再生機能のために常に登録)
 				ToggleStreamCallback(true);
-				// キーボードフックを登録
-				hKeyboardHook_ = SetWindowsHookEx(WH_KEYBOARD, KeyboardProc, g_hinstDLL, GetCurrentThreadId());
 				// DWMの更新タイミングでTIMER_FORWARDを呼ぶスレッドを開始(Vista以降)
 				if (s_.timerInterval < 0) {
 					OSVERSIONINFO vi;
@@ -384,10 +381,6 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 				CloseHandle(hSyncThread_);
 				hSyncThread_ = NULL;
 			}
-			if (hKeyboardHook_) {
-				UnhookWindowsHookEx(hKeyboardHook_);
-				hKeyboardHook_ = NULL;
-			}
 			ToggleStreamCallback(false);
 			m_pApp->SetWindowMessageCallback(NULL);
 			DestroyWindow(hForce_);
@@ -402,73 +395,6 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 		m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
 		return true;
 	}
-}
-
-LRESULT CALLBACK CNicoJK::KeyboardProc(int code, WPARAM wParam, LPARAM lParam)
-{
-	// Enterキー押下
-	if (code == HC_ACTION && wParam == VK_RETURN && !(lParam & 0x40000000)) {
-		CNicoJK *pThis = dynamic_cast<CNicoJK*>(g_pPlugin);
-		// フォーカスがコメント入力欄にあればフック
-		if (pThis && IsChild(GetDlgItem(pThis->hForce_, IDC_CB_POST), GetFocus())) {
-			// IMEでのEnterを無視する(参考: https://github.com/rutice/chapter.auf )
-			HIMC hImc = ImmGetContext(pThis->hForce_);
-			bool bActive = ImmGetOpenStatus(hImc) && ImmGetCompositionString(hImc, GCS_COMPSTR, NULL, 0) > 0;
-			ImmReleaseContext(pThis->hForce_, hImc);
-			if (!bActive) {
-				SendNotifyMessage(pThis->hForce_, WM_POST_COMMENT, 0, 0);
-				return TRUE;
-			}
-		}
-	}
-	// Ctrl+'V'キー押下
-	else if (code == HC_ACTION && wParam == 'V' && GetKeyState(VK_CONTROL) < 0) {
-		CNicoJK *pThis = dynamic_cast<CNicoJK*>(g_pPlugin);
-		// フォーカスがコメント入力欄にあればフック
-		if (pThis && IsChild(GetDlgItem(pThis->hForce_, IDC_CB_POST), GetFocus())) {
-			int len = GetWindowTextLength(GetDlgItem(pThis->hForce_, IDC_CB_POST));
-			LONG selRange = static_cast<LONG>(SendDlgItemMessage(pThis->hForce_, IDC_CB_POST, CB_GETEDITSEL, NULL, NULL));
-			// 入力欄が空になるときだけフック
-			if (len == 0 || MAKELONG(0, len) == selRange) {
-				// クリップボードを取得
-				TCHAR clip[512];
-				clip[0] = TEXT('\0');
-				if (OpenClipboard(NULL)) {
-					HGLOBAL hg = GetClipboardData(CF_UNICODETEXT);
-					if (hg) {
-						LPWSTR pg = static_cast<LPWSTR>(GlobalLock(hg));
-						if (pg) {
-							lstrcpyn(clip, pg, _countof(clip));
-							GlobalUnlock(hg);
-						}
-					}
-					CloseClipboard();
-				}
-				// 改行->レコードセパレータ
-				LPTSTR q = clip;
-				bool bLF = false;
-				bool bMultiLine = false;
-				for (LPCTSTR p = q; *p; ++p) {
-					if (*p == TEXT('\n')) {
-						*q++ = TEXT('\x1e');
-						bLF = true;
-					} else if (*p != TEXT('\r')) {
-						*q++ = *p;
-						bMultiLine = bLF;
-					}
-				}
-				*q = TEXT('\0');
-				// フックが必要なのは複数行のペーストだけ
-				if (bMultiLine) {
-					SetDlgItemText(pThis->hForce_, IDC_CB_POST, clip);
-					SendMessage(pThis->hForce_, WM_COMMAND, MAKEWPARAM(IDC_CB_POST, CBN_EDITCHANGE), 0);
-					return TRUE;
-				}
-			}
-		}
-	}
-	// 第1引数は無視されるとのこと
-	return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
 unsigned int __stdcall CNicoJK::SyncThread(void *pParam)
@@ -1456,6 +1382,65 @@ static LRESULT CALLBACK ForceListBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
 
+// サブクラス化した投稿欄のプロシージャ
+static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg) {
+	case WM_CHAR:
+		if (wParam == VK_RETURN) {
+			// 改行入力
+			if ((lParam & 0x40000000) == 0) {
+				SendMessage(static_cast<HWND>(GetProp(hwnd, TEXT("Root"))), WM_POST_COMMENT, 0, 0);
+			}
+			return 0;
+		} else if (wParam == 0x16) {
+			// Ctrl+'V'入力
+			HWND hwndRoot = static_cast<HWND>(GetProp(hwnd, TEXT("Root")));
+			int len = GetWindowTextLength(GetDlgItem(hwndRoot, IDC_CB_POST));
+			LONG selRange = static_cast<LONG>(SendDlgItemMessage(hwndRoot, IDC_CB_POST, CB_GETEDITSEL, NULL, NULL));
+			// 入力欄が空になるときだけ処理
+			if (len == 0 || MAKELONG(0, len) == selRange) {
+				// クリップボードを取得
+				TCHAR clip[512];
+				clip[0] = TEXT('\0');
+				if (OpenClipboard(NULL)) {
+					HGLOBAL hg = GetClipboardData(CF_UNICODETEXT);
+					if (hg) {
+						LPWSTR pg = static_cast<LPWSTR>(GlobalLock(hg));
+						if (pg) {
+							lstrcpyn(clip, pg, _countof(clip));
+							GlobalUnlock(hg);
+						}
+					}
+					CloseClipboard();
+				}
+				// 改行->レコードセパレータ
+				LPTSTR q = clip;
+				bool bLF = false;
+				bool bMultiLine = false;
+				for (LPCTSTR p = q; *p; ++p) {
+					if (*p == TEXT('\n')) {
+						*q++ = TEXT('\x1e');
+						bLF = true;
+					} else if (*p != TEXT('\r')) {
+						*q++ = *p;
+						bMultiLine = bLF;
+					}
+				}
+				*q = TEXT('\0');
+				// 複数行のペーストだけ独自に処理
+				if (bMultiLine) {
+					SetDlgItemText(hwndRoot, IDC_CB_POST, clip);
+					SendMessage(hwndRoot, WM_COMMAND, MAKEWPARAM(IDC_CB_POST, CBN_EDITCHANGE), 0);
+					return 0;
+				}
+			}
+		}
+		break;
+	}
+	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
+}
+
 LRESULT CALLBACK CNicoJK::ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (uMsg == WM_CREATE) {
@@ -1576,11 +1561,27 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			HWND hList = GetDlgItem(hwnd, IDC_FORCELIST);
 			SetProp(hList, TEXT("DefProc"), reinterpret_cast<HANDLE>(GetWindowLongPtr(hList, GWLP_WNDPROC)));
 			SetWindowLongPtr(hList, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ForceListBoxProc));
+			// 投稿欄のサブクラス化
+			COMBOBOXINFO cbi = {};
+			cbi.cbSize = sizeof(cbi);
+			if (GetComboBoxInfo(GetDlgItem(hwnd, IDC_CB_POST), &cbi)) {
+				SetProp(cbi.hwndItem, TEXT("Root"), hwnd);
+				SetProp(cbi.hwndItem, TEXT("DefProc"), reinterpret_cast<HANDLE>(GetWindowLongPtr(cbi.hwndItem, GWLP_WNDPROC)));
+				SetWindowLongPtr(cbi.hwndItem, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ForcePostEditBoxProc));
+			}
 			return TRUE;
 		}
 		return FALSE;
 	case WM_DESTROY:
 		{
+			// 投稿欄のサブクラス化を解除
+			COMBOBOXINFO cbi = {};
+			cbi.cbSize = sizeof(cbi);
+			if (GetComboBoxInfo(GetDlgItem(hwnd, IDC_CB_POST), &cbi)) {
+				SetWindowLongPtr(cbi.hwndItem, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(GetProp(cbi.hwndItem, TEXT("DefProc"))));
+				RemoveProp(cbi.hwndItem, TEXT("DefProc"));
+				RemoveProp(cbi.hwndItem, TEXT("Root"));
+			}
 			// 勢いリストのサブクラス化を解除
 			HWND hList = GetDlgItem(hwnd, IDC_FORCELIST);
 			SetWindowLongPtr(hList, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(GetProp(hList, TEXT("DefProc"))));
