@@ -70,6 +70,7 @@ private:
 		RECT rcForce;
 		int forceOpacity;
 		int commentOpacity;
+		int headerMask;
 		bool bSetRelative;
 		bool bUsePanel;
 	};
@@ -144,7 +145,7 @@ private:
 	size_t logListDisplayedSize_;
 	bool bPendingTimerUpdateList_;
 	DWORD lastUpdateListTick_;
-	TCHAR lastCalcText_[64];
+	std::wstring lastCalcText_;
 	int lastCalcWidth_;
 
 	// コメント描画ウィンドウ

@@ -140,7 +140,6 @@ CNicoJK::CNicoJK()
 {
 	szIniFileName_[0] = TEXT('\0');
 	cookie_[0] = '\0';
-	lastCalcText_[0] = TEXT('\0');
 	jkLeaveThreadID_[0] = '\0';
 	commentServerResponse_[0] = '\0';
 	getflvUserID_[0] = '\0';
@@ -530,6 +529,7 @@ void CNicoJK::LoadFromIni()
 	s_.rcForce.bottom		= GetBufferedProfileInt(&buf.front(), TEXT("ForceHeight"), 0) + s_.rcForce.top;
 	s_.forceOpacity			= GetBufferedProfileInt(&buf.front(), TEXT("ForceOpacity"), 255);
 	s_.commentOpacity		= GetBufferedProfileInt(&buf.front(), TEXT("CommentOpacity"), 255);
+	s_.headerMask			= GetBufferedProfileInt(&buf.front(), TEXT("HeaderMask"), 0);
 	s_.bSetRelative			= GetBufferedProfileInt(&buf.front(), TEXT("SetRelative"), 0) != 0;
 
 	ntsIDList_.clear();
@@ -572,6 +572,7 @@ void CNicoJK::SaveToIni()
 	WritePrivateProfileInt(TEXT("Window"), TEXT("ForceHeight"), s_.rcForce.bottom - s_.rcForce.top, szIniFileName_);
 	WritePrivateProfileInt(TEXT("Window"), TEXT("ForceOpacity"), s_.forceOpacity, szIniFileName_);
 	WritePrivateProfileInt(TEXT("Window"), TEXT("CommentOpacity"), s_.commentOpacity, szIniFileName_);
+	WritePrivateProfileInt(TEXT("Window"), TEXT("HeaderMask"), s_.headerMask, szIniFileName_);
 	WritePrivateProfileInt(TEXT("Window"), TEXT("SetRelative"), s_.bSetRelative, szIniFileName_);
 }
 
@@ -1342,6 +1343,7 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		static const TCHAR text[] =
 			TEXT("@help\tヘルプを表示")
 			TEXT("\n@fopa N\t勢い窓の透過レベル1～10(Nを省略すると10)。")
+			TEXT("\n@mask N\tログの時間(ID)部の省略マスク(Nを省略すると0)。")
 			TEXT("\n@fwd N\tコメントの前進")
 			TEXT("\n@size N\tコメントの文字サイズをN%にする(Nを省略すると100%)。")
 			TEXT("\n@speed N\tコメントの速度をN%にする(Nを省略すると100%)。")
@@ -1356,6 +1358,11 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		LONG style = GetWindowLong(hForce_, GWL_EXSTYLE);
 		SetWindowLong(hForce_, GWL_EXSTYLE, s_.forceOpacity == 255 ? style & ~WS_EX_LAYERED : style | WS_EX_LAYERED);
 		SetLayeredWindowAttributes(hForce_, 0, static_cast<BYTE>(s_.forceOpacity), LWA_ALPHA);
+	} else if (!lstrcmpi(cmd, TEXT("mask"))) {
+		s_.headerMask = 0 < nArg && nArg < INT_MAX ? nArg : 0;
+		TCHAR text[64];
+		wsprintf(text, TEXT("現在の省略マスクは%d(0x%04x)です。"), s_.headerMask, s_.headerMask);
+		OutputMessageLog(text);
 	} else if (!lstrcmpi(cmd, TEXT("fwd")) && nArg != INT_MAX) {
 		if (nArg == 0) {
 			forwardOffsetDelta_ = -forwardOffset_;
@@ -1588,7 +1595,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			logList_.clear();
 			logListDisplayedSize_ = 0;
 			bPendingTimerUpdateList_ = false;
-			lastCalcText_[0] = TEXT('\0');
+			lastCalcText_.clear();
 			commentWindow_.SetStyle(s_.commentFontName, s_.commentFontNameMulti, s_.bCommentFontBold, s_.bCommentFontAntiAlias,
 			                        s_.commentFontOutline, s_.bUseOsdCompositor, s_.bUseTexture, s_.bUseDrawingThread);
 			commentWindow_.SetCommentSize(s_.commentSize, s_.commentSizeMin, s_.commentSizeMax, s_.commentLineMargin);
@@ -1807,15 +1814,28 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							// 左側文字列の描画幅指定
 							int fixedLen = StrCSpn(&pText[1], TEXT("}"));
 							if (static_cast<int>(text + textLen - pText) >= 2 + 2 * fixedLen) {
-								if (StrCmpN(lastCalcText_, &pText[1], fixedLen + 1)) {
-									RECT rcCalc = rc;
-									DrawText(lpdis->hDC, &pText[1], fixedLen, &rcCalc, DT_SINGLELINE | DT_NOCLIP | DT_NOPREFIX | DT_CALCRECT);
-									lstrcpyn(lastCalcText_, &pText[1], min(fixedLen + 2, _countof(lastCalcText_)));
-									lastCalcWidth_ = rcCalc.right - rcCalc.left;
-								}
-								DrawText(lpdis->hDC, &pText[2 + fixedLen], fixedLen, &rc, DT_SINGLELINE | DT_NOCLIP | DT_NOPREFIX);
-								rc.left += lastCalcWidth_;
+								std::wstring calcText(&pText[1], &pText[1 + fixedLen]);
+								std::wstring drawText(&pText[2 + fixedLen], &pText[2 + 2 * fixedLen]);
 								pText += 2 + 2 * fixedLen;
+								int mask = s_.headerMask;
+								for (size_t i = 0; i < calcText.size(); mask >>= 1) {
+									if (mask & 1) {
+										calcText.erase(i, 1);
+										drawText.erase(i, 1);
+									} else {
+										++i;
+									}
+								}
+								if (!calcText.empty()) {
+									if (lastCalcText_ != calcText) {
+										RECT rcCalc = rc;
+										DrawText(lpdis->hDC, calcText.c_str(), -1, &rcCalc, DT_SINGLELINE | DT_NOCLIP | DT_NOPREFIX | DT_CALCRECT);
+										lastCalcText_ = calcText;
+										lastCalcWidth_ = rcCalc.right - rcCalc.left;
+									}
+									DrawText(lpdis->hDC, drawText.c_str(), -1, &rc, DT_SINGLELINE | DT_NOCLIP | DT_NOPREFIX);
+									rc.left += lastCalcWidth_;
+								}
 							}
 						}
 						COLORREF crBkOld = SetBkColor(lpdis->hDC, crBk);
