@@ -1511,6 +1511,55 @@ static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
 
+// サブクラス化したボタンのプロシージャ
+static LRESULT CALLBACK TVTestPanelButtonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg) {
+	case WM_PAINT:
+		{
+			TVTest::CTVTestApp *pApp = reinterpret_cast<TVTest::CTVTestApp*>(GetProp(hwnd, TEXT("App")));
+			int state = Button_GetState(hwnd);
+			LPCWSTR style = state & BST_HOT ? L"control-panel.item.hot" : state & BST_CHECKED ? L"control-panel.item.checked" : L"control-panel.item";
+			PAINTSTRUCT ps;
+			HDC hdc = BeginPaint(hwnd, &ps);
+			RECT rc;
+			GetClientRect(hwnd, &rc);
+			pApp->ThemeDrawBackground(style, hdc, rc);
+			TCHAR text[256];
+			if (GetWindowText(hwnd, text, _countof(text))) {
+				HFONT hFont = reinterpret_cast<HFONT>(SendMessage(hwnd, WM_GETFONT, 0, 0));
+				HFONT hFontOld = NULL;
+				if (hFont) {
+					hFontOld = SelectFont(hdc, hFont);
+				}
+				int oldBkMode = SetBkMode(hdc, TRANSPARENT);
+				pApp->ThemeDrawText(style, hdc, text, rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+				SetBkMode(hdc, oldBkMode);
+				if (hFont) {
+					SelectFont(hdc, hFontOld);
+				}
+			}
+			EndPaint(hwnd, &ps);
+		}
+		return 0;
+	}
+	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
+}
+
+static void SetTVTestPanelItem(HWND hButton, TVTest::CTVTestApp *pApp, LRESULT (CALLBACK *pProc)(HWND, UINT, WPARAM, LPARAM))
+{
+	SetProp(hButton, TEXT("App"), pApp);
+	SetProp(hButton, TEXT("DefProc"), reinterpret_cast<HANDLE>(GetWindowLongPtr(hButton, GWLP_WNDPROC)));
+	SetWindowLongPtr(hButton, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(pProc));
+}
+
+static void ResetTVTestPanelItem(HWND hButton)
+{
+	SetWindowLongPtr(hButton, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(GetProp(hButton, TEXT("DefProc"))));
+	RemoveProp(hButton, TEXT("DefProc"));
+	RemoveProp(hButton, TEXT("App"));
+}
+
 LRESULT CALLBACK CNicoJK::PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (uMsg == WM_CREATE) {
@@ -1692,11 +1741,25 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				SetProp(cbi.hwndItem, TEXT("DefProc"), reinterpret_cast<HANDLE>(GetWindowLongPtr(cbi.hwndItem, GWLP_WNDPROC)));
 				SetWindowLongPtr(cbi.hwndItem, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ForcePostEditBoxProc));
 			}
+			// パネルアイテムのサブクラス化
+			if (hPanel_) {
+				SetTVTestPanelItem(GetDlgItem(hwnd, IDC_RADIO_FORCE), m_pApp, TVTestPanelButtonProc);
+				SetTVTestPanelItem(GetDlgItem(hwnd, IDC_RADIO_LOG), m_pApp, TVTestPanelButtonProc);
+				SetTVTestPanelItem(GetDlgItem(hwnd, IDC_CHECK_SPECFILE), m_pApp, TVTestPanelButtonProc);
+				SetTVTestPanelItem(GetDlgItem(hwnd, IDC_CHECK_RELATIVE), m_pApp, TVTestPanelButtonProc);
+			}
 			return TRUE;
 		}
 		return FALSE;
 	case WM_DESTROY:
 		{
+			// パネルアイテムのサブクラス化を解除
+			if (hPanel_) {
+				ResetTVTestPanelItem(GetDlgItem(hwnd, IDC_RADIO_FORCE));
+				ResetTVTestPanelItem(GetDlgItem(hwnd, IDC_RADIO_LOG));
+				ResetTVTestPanelItem(GetDlgItem(hwnd, IDC_CHECK_SPECFILE));
+				ResetTVTestPanelItem(GetDlgItem(hwnd, IDC_CHECK_RELATIVE));
+			}
 			// 投稿欄のサブクラス化を解除
 			COMBOBOXINFO cbi = {};
 			cbi.cbSize = sizeof(cbi);
