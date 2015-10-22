@@ -1477,7 +1477,7 @@ static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam
 			// Ctrl+'V'入力
 			HWND hwndRoot = static_cast<HWND>(GetProp(hwnd, TEXT("Root")));
 			int len = GetWindowTextLength(GetDlgItem(hwndRoot, IDC_CB_POST));
-			LONG selRange = static_cast<LONG>(SendDlgItemMessage(hwndRoot, IDC_CB_POST, CB_GETEDITSEL, NULL, NULL));
+			LONG selRange = static_cast<LONG>(SendDlgItemMessage(hwndRoot, IDC_CB_POST, CB_GETEDITSEL, 0, 0));
 			// 入力欄が空になるときだけ処理
 			if (len == 0 || MAKELONG(0, len) == selRange) {
 				// クリップボードを取得

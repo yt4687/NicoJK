@@ -42,3 +42,7 @@
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "imm32.lib")
 #pragma comment(lib, "crypt32.lib")
+
+// この置換はさほど良い習慣ではない
+#undef NULL
+#define NULL nullptr
