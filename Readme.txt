@@ -60,6 +60,7 @@ NicoJK.iniを確認してください。
 
 ■制限
 今のところbigコマンドは解釈しません。
+パネルのNicoJKタブのテーマ/配色は"操作パネル"の設定に連動します。
 
 ■テスト環境
 Win7 sp1 + PT2/PT3 + ptTimer + BonDriver_ptmr.dll + TVTest 0.7.19(x86)
@@ -88,6 +89,7 @@ chatタグの左右に空白その他の文字を加えてはいけない(BOMも
 
 ■感謝
 過去ログ再生機能、コメント機能を実装していただいたxtne6f氏に感謝いたします。
+N/実/勢アイコンは「ふい字」(http://hp.vector.co.jp/authors/VA039499/)です。
 
 ■更新履歴
 ChangeLog.txtを参照
