@@ -182,7 +182,7 @@ bool CNicoJK::Initialize()
 	wc.style = CS_VREDRAW | CS_HREDRAW;
 	wc.lpfnWndProc = ForceWindowProc;
 	wc.hInstance = g_hinstDLL;
-	wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+	wc.hbrBackground = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
 	wc.lpszClassName = TEXT("ru.jk.force");
 	if (RegisterClassEx(&wc) == 0) {
 		return false;
@@ -1001,6 +1001,14 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 			}
 		}
 		break;
+	case TVTest::EVENT_COLORCHANGE:
+		// 色の設定が変化した
+		if (pThis->hPanel_ && pThis->hForce_) {
+			DeleteBrush(SetClassLongPtr(pThis->hForce_, GCLP_HBRBACKGROUND,
+				reinterpret_cast<LONG_PTR>(CreateSolidBrush(pThis->m_pApp->GetColor(L"ControlPanelMargin")))));
+			InvalidateRect(pThis->hForce_, NULL, TRUE);
+		}
+		break;
 	case TVTest::EVENT_RECORDSTATUSCHANGE:
 		// 録画状態が変化した
 		pThis->bRecording_ = lParam1 != TVTest::RECORD_STATUS_NOTRECORDING;
@@ -1558,20 +1566,22 @@ LRESULT CALLBACK CNicoJK::ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
 
 bool CNicoJK::CreateForceWindowItems(HWND hwnd)
 {
+	int padding = hPanel_ ? 0 : 4;
 	if (CreateWindowEx(0, TEXT("BUTTON"), TEXT("勢い"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
-	        4, 4, 68, 26, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_FORCE), g_hinstDLL, NULL) &&
+	        padding, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_FORCE), g_hinstDLL, NULL) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("ログ"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
-	        74, 4, 68, 26, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_LOG), g_hinstDLL, NULL) &&
+	        padding + 60, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_LOG), g_hinstDLL, NULL) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("File"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-	        148, 10, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_SPECFILE), g_hinstDLL, NULL) &&
+	        padding + 124, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_SPECFILE), g_hinstDLL, NULL) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("Rel"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-	        200, 10, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_RELATIVE), g_hinstDLL, NULL) &&
+	        padding + 174, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_RELATIVE), g_hinstDLL, NULL) &&
+	    // TODO: (描画がとても面倒なので)スライダーはパネルでは表示しない
 	    CreateWindowEx(0, TRACKBAR_CLASS, TEXT("不透明度"), WS_CHILD | WS_VISIBLE | TBS_BOTH | TBS_NOTICKS | TBS_TOOLTIPS,
-	        252, 10, 64, 21, hwnd, reinterpret_cast<HMENU>(IDC_SLIDER_OPACITY), g_hinstDLL, NULL) &&
+	        padding + 224, hPanel_ ? -100 : padding + 4, 64, 21, hwnd, reinterpret_cast<HMENU>(IDC_SLIDER_OPACITY), g_hinstDLL, NULL) &&
 	    CreateWindowEx(WS_EX_ACCEPTFILES, TEXT("LISTBOX"), NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_NOINTEGRALHEIGHT | LBS_HASSTRINGS | LBS_OWNERDRAWFIXED | LBS_NOTIFY,
-	        4, 32, 100, 100, hwnd, reinterpret_cast<HMENU>(IDC_FORCELIST), g_hinstDLL, NULL) &&
+	        padding, padding + 24, 100, 100, hwnd, reinterpret_cast<HMENU>(IDC_FORCELIST), g_hinstDLL, NULL) &&
 	    CreateWindowEx(0, TEXT("COMBOBOX"), NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS,
-	        4, 100, 100, 50, hwnd, reinterpret_cast<HMENU>(IDC_CB_POST), g_hinstDLL, NULL))
+	        padding, padding + 124, 100, 50, hwnd, reinterpret_cast<HMENU>(IDC_CB_POST), g_hinstDLL, NULL))
 	{
 		if (hForceFont_) {
 			SendDlgItemMessage(hwnd, IDC_RADIO_FORCE, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
@@ -1641,6 +1651,8 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			PostMessage(hwnd, WM_TIMER, TIMER_JK_WATCHDOG, 0);
 			if (hPanel_) {
 				// パネルウィンドウに連動
+				DeleteBrush(SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND,
+					reinterpret_cast<LONG_PTR>(CreateSolidBrush(m_pApp->GetColor(L"PanelBack")))));
 				GetClientRect(hPanel_, &s_.rcForce);
 			} else {
 				// 位置を復元
@@ -2539,24 +2551,23 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		{
 			RECT rcParent, rc;
 			GetClientRect(hwnd, &rcParent);
-			int padding = 4;
 			HWND hItem = GetDlgItem(hwnd, IDC_CB_POST);
 			GetWindowRect(hItem, &rc);
 			MapWindowPoints(NULL, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
+			int padding = rc.left;
 			if (!cookie_[0]) {
 				// クッキーが設定されていなければ間違いなく投稿不能なので入力ボックスを表示しない
 				SetWindowPos(hItem, NULL, rc.left, rcParent.bottom, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
 			} else {
 				padding += 6 + static_cast<int>(SendMessage(hItem, CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0));
 				SetWindowPos(hItem, NULL, rc.left, rcParent.bottom-padding, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
-				padding += 4;
 			}
 			hItem = GetDlgItem(hwnd, IDC_FORCELIST);
 			GetWindowRect(hItem, &rc);
 			MapWindowPoints(NULL, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
-			if (padding > 8) {
+			if (cookie_[0]) {
 				// ボタン類が入力ボックスと被らないようにする
-				int swShow = rcParent.bottom-rc.top-padding < -8 ? SW_HIDE : SW_SHOW;
+				int swShow = rcParent.bottom-rc.top-padding < -4 ? SW_HIDE : SW_SHOW;
 				if (uMsg == WM_SHOWWINDOW || (IsWindowVisible(GetDlgItem(hwnd, IDC_RADIO_FORCE)) != FALSE) != (swShow != SW_HIDE)) {
 					ShowWindow(GetDlgItem(hwnd, IDC_RADIO_FORCE), swShow);
 					ShowWindow(GetDlgItem(hwnd, IDC_RADIO_LOG), swShow);
