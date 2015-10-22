@@ -957,8 +957,8 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 			}
 
 			// 描画した部分を未使用矩形から引く
-			int top = py;
-			int bottom = top + entireDrawHeight;
+			LONG top = py;
+			LONG bottom = top + entireDrawHeight;
 			if (bottom - prcUnused->top < prcUnused->bottom - top) {
 				prcUnused->top = min(max(bottom, prcUnused->top), prcUnused->bottom);
 			} else {
@@ -998,8 +998,8 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 			}
 			g.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
 			g.DrawImage(pTextureBitmap_, 0, 0, textureWidth / 4, height / 4);
-			prcUnused->top = min(max(height / 4, prcUnused->top), prcUnused->bottom);
-			prcUnusedWoShita->top = min(max(height / 4, prcUnusedWoShita->top), prcUnusedWoShita->bottom);
+			prcUnused->top = min(max(static_cast<LONG>(height / 4), prcUnused->top), prcUnused->bottom);
+			prcUnusedWoShita->top = min(max(static_cast<LONG>(height / 4), prcUnusedWoShita->top), prcUnusedWoShita->bottom);
 		}
 		if (debugFlags_ & 1) {
 			// Debug:フレームレートを表示

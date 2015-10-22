@@ -28,6 +28,7 @@
 #include <list>
 #include <regex>
 #include <utility>
+#include <algorithm>
 #include <tchar.h>
 #include <dwmapi.h>
 #include <CommDlg.h>
@@ -46,3 +47,9 @@
 // この置換はさほど良い習慣ではない
 #undef NULL
 #define NULL nullptr
+
+// NOMINMAXではGdiPlus.hが通らない
+#undef min
+#undef max
+using std::min;
+using std::max;

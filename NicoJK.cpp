@@ -1238,7 +1238,7 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 		char mail[256];
 		mail[0] = '\0';
 		if (std::regex_search(m[1].first, m[1].second, mm, reMail)) {
-			lstrcpynA(mail, mm[1].first, min(static_cast<int>(mm[1].length()) + 1, _countof(mail)));
+			lstrcpynA(mail, mm[1].first, min<int>(static_cast<int>(mm[1].length()) + 1, _countof(mail)));
 		}
 		// abone属性(ローカル拡張)
 		bool bAbone = std::regex_search(m[1].first, m[1].second, reAbone);
@@ -1277,7 +1277,7 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 			// logcmd属性(ローカル拡張)
 			char logcmd[256];
 			if (std::regex_search(m[1].first, m[1].second, mm, reLogcmd)) {
-				lstrcpynA(logcmd, mm[1].first, min(static_cast<int>(mm[1].length()) + 1, _countof(logcmd)));
+				lstrcpynA(logcmd, mm[1].first, min<int>(static_cast<int>(mm[1].length()) + 1, _countof(logcmd)));
 				e.cr = GetColor(logcmd);
 			}
 		}
@@ -1342,7 +1342,7 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 	// パラメータ分割
 	TCHAR cmd[16];
 	int cmdLen = StrCSpn(comm, TEXT(" "));
-	lstrcpyn(cmd, comm, min(cmdLen + 1, _countof(cmd)));
+	lstrcpyn(cmd, comm, min<int>(cmdLen + 1, _countof(cmd)));
 	LPCTSTR arg = &comm[cmdLen] + StrSpn(&comm[cmdLen], TEXT(" "));
 	int nArg;
 	if (!StrToIntEx(arg, STIF_DEFAULT, &nArg)) {
