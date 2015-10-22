@@ -136,6 +136,7 @@ CCommentWindow::CCommentWindow()
 	, chatCount_(0)
 	, currentWindowWidth_(-1)
 	, autoHideCount_(0)
+	, parentSizedCount_(0)
 	, bUseOsd_(false)
 	, bShowOsd_(false)
 	, bUseTexture_(false)
@@ -225,6 +226,7 @@ void CCommentWindow::Destroy()
 		osdCompositor_.UpdateSurface();
 	}
 	autoHideCount_ = 0;
+	parentSizedCount_ = 0;
 
 	delete pgTexture_;
 	delete pTextureBitmap_;
@@ -324,16 +326,16 @@ bool CCommentWindow::AllocateWorkBitmap(int width, int height, bool *pbRealloc)
 void CCommentWindow::OnParentMove()
 {
 	if (hwnd_) {
-		RECT rc;
-		GetWindowRect(hwndParent_, &rc);
-		SetWindowPos(hwnd_, NULL, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+		GetWindowRect(hwndParent_, &rcParent_);
+		SetWindowPos(hwnd_, NULL, rcParent_.left, rcParent_.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 }
 
 void CCommentWindow::OnParentSize()
 {
-	if (hwnd_ && bUseOsd_) {
-		if (bShowOsd_) {
+	if (hwnd_) {
+		GetWindowRect(hwndParent_, &rcParent_);
+		if (bUseOsd_ && bShowOsd_) {
 			osdCompositor_.DeleteTexture(0, 0);
 			bShowOsd_ = false;
 			RECT rc;
@@ -356,11 +358,10 @@ void CCommentWindow::OnParentSize()
 					bShowOsd_ = true;
 				}
 			}
+		} else if (!bUseOsd_) {
+			RECT rc = rcParent_;
+			SetWindowPos(hwnd_, NULL, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
 		}
-	} else if (hwnd_ && !bUseOsd_) {
-		RECT rc;
-		GetWindowRect(hwndParent_, &rc);
-		SetWindowPos(hwnd_, NULL, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 }
 
@@ -1025,14 +1026,13 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 
 LRESULT CALLBACK CCommentWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	static const int TIMER_AUTOHIDE = 1;
 	CCommentWindow *pThis;
 	switch (uMsg) {
 	case WM_CREATE:
 		pThis = static_cast<CCommentWindow*>((reinterpret_cast<LPCREATESTRUCT>(lParam))->lpCreateParams);
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
 		pThis->hwnd_ = hwnd;
-		SetTimer(hwnd, TIMER_AUTOHIDE, 1000, NULL);
+		SetTimer(hwnd, 1, 1000, NULL);
 		return 0;
 	case WM_DESTROY:
 		// トップレベルじゃないのでDestroy()以外から他発的に破棄されることもある
@@ -1040,7 +1040,7 @@ LRESULT CALLBACK CCommentWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 		pThis->hwnd_ = NULL;
 		return 0;
 	case WM_TIMER:
-		if (wParam == TIMER_AUTOHIDE) {
+		if (wParam == 1) {
 			pThis = reinterpret_cast<CCommentWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 			bool bEmpty;
 			{
@@ -1060,6 +1060,15 @@ LRESULT CALLBACK CCommentWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 				}
 			} else {
 				pThis->autoHideCount_ = 0;
+			}
+			// OnParentMove()/OnParentSize()が適切なタイミングで呼ばれるのが理想だが、最低限のポーリングもする
+			RECT rc;
+			if (GetWindowRect(pThis->hwndParent_, &rc) && !EqualRect(&rc, &pThis->rcParent_)) {
+				if (++pThis->parentSizedCount_ >= 2) {
+					pThis->OnParentSize();
+				}
+			} else {
+				pThis->parentSizedCount_ = 0;
 			}
 			return 0;
 		}

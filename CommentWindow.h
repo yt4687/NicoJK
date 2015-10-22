@@ -126,6 +126,8 @@ private:
 	// chatList_(ƒŠƒXƒg\‘¢‚Ì‚İ),chatPoolList_‚ğ•ÛŒì
 	CCriticalLock chatLock_;
 	int autoHideCount_;
+	int parentSizedCount_;
+	RECT rcParent_;
 	COsdCompositor osdCompositor_;
 	bool bUseOsd_;
 	bool bShowOsd_;
