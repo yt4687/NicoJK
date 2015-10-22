@@ -1528,7 +1528,6 @@ LRESULT CALLBACK CNicoJK::PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
 					if (pThis->hForce_) {
 						SendMessage(pThis->hForce_, WM_UPDATE_LIST, TRUE, 0);
 						PostMessage(pThis->hForce_, WM_TIMER, TIMER_UPDATE, 0);
-						OutputDebugString(TEXT("OK\r\n"));
 					}
 				} else if (bHide && GetProp(hwnd, TEXT("IsHide")) == reinterpret_cast<HANDLE>('N')) {
 					SetProp(hwnd, TEXT("IsHide"), reinterpret_cast<HANDLE>('Y'));
