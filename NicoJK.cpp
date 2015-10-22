@@ -330,7 +330,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			// 必要ならサーバに渡すCookieを取得
 			cookie_[0] = '\0';
 			TCHAR currDir[MAX_PATH];
-			if (!s_.execGetCookie.empty() && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
+			if (s_.execGetCookie == TEXT("cmd /c echo ;")) {
+				lstrcpyA(cookie_, ";");
+			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
 				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
 					cookie_[0] = '\0';
 					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。");
@@ -490,7 +492,7 @@ void CNicoJK::LoadFromIni()
 	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_Pipe.dll"),
 	                         val, _countof(val));
 	s_.nonTunerDrivers = val;
-	GetBufferedProfileString(pBuf, TEXT("execGetCookie"), TEXT(""), val, _countof(val));
+	GetBufferedProfileString(pBuf, TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
 	s_.execGetCookie = val;
 	GetBufferedProfileString(pBuf, TEXT("mailDecorations"),
 	                         TEXT("[cyan big]:[shita]:[green shita small]:[orange]::"),
