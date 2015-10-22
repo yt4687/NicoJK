@@ -1352,6 +1352,7 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 			TEXT("@help\tヘルプを表示")
 			TEXT("\n@fopa N\t勢い窓の透過レベル1～10(Nを省略すると10)。")
 			TEXT("\n@mask N\tログの時間(ID)部の省略マスク(Nを省略すると0)。")
+			TEXT("\n@opa N\tコメントの透過レベル0～10(Nを省略すると10)。")
 			TEXT("\n@fwd N\tコメントの前進")
 			TEXT("\n@size N\tコメントの文字サイズをN%にする(Nを省略すると100%)。")
 			TEXT("\n@speed N\tコメントの速度をN%にする(Nを省略すると100%)。")
@@ -1370,6 +1371,13 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		s_.headerMask = 0 < nArg && nArg < INT_MAX ? nArg : 0;
 		TCHAR text[64];
 		wsprintf(text, TEXT("現在の省略マスクは%d(0x%04x)です。"), s_.headerMask, s_.headerMask);
+		OutputMessageLog(text);
+	} else if (!lstrcmpi(cmd, TEXT("opa"))) {
+		int opa = 0 <= nArg && nArg < 10 ? nArg : 10;
+		SendDlgItemMessage(hForce_, IDC_SLIDER_OPACITY, TBM_SETPOS, TRUE, opa);
+		SendMessage(hForce_, WM_HSCROLL, MAKEWPARAM(SB_THUMBTRACK, opa), reinterpret_cast<LPARAM>(GetDlgItem(hForce_, IDC_SLIDER_OPACITY)));
+		TCHAR text[64];
+		wsprintf(text, TEXT("現在の透過レベルは%dです。"), opa);
 		OutputMessageLog(text);
 	} else if (!lstrcmpi(cmd, TEXT("fwd")) && nArg != INT_MAX) {
 		if (nArg == 0) {
