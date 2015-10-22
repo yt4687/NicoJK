@@ -610,8 +610,7 @@ void CNicoJK::SaveRplListToIni(LPCTSTR section, const std::vector<RPL_ELEM> &rpl
 	if (bClearSection) {
 		WritePrivateProfileString(section, NULL, NULL, szIniFileName_);
 	}
-	std::vector<RPL_ELEM>::const_iterator it = rplList.begin();
-	for (; it != rplList.end(); ++it) {
+	for (auto it = rplList.cbegin(); it != rplList.end(); ++it) {
 		if (it->section == section) {
 			TCHAR key[32];
 			wsprintf(key, TEXT("Pattern%d"), it->key);
@@ -1215,8 +1214,8 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 	std::string rpl[2];
 	if (!rplList_.empty()) {
 		rpl[1] = tag;
-		std::vector<RPL_ELEM>::const_iterator it = rplList_.begin();
-		for (int i = 0; it != rplList_.end(); ++it) {
+		int i = 0;
+		for (auto it = rplList_.cbegin(); it != rplList_.end(); ++it) {
 			if (it->IsEnabled()) {
 				try {
 					rpl[i % 2] = std::regex_replace(rpl[(i + 1) % 2], it->re, it->fmt);
@@ -1400,8 +1399,7 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		OutputMessageLog(text);
 	} else if (!lstrcmpi(cmd, TEXT("rl"))) {
 		std::wstring text;
-		std::vector<RPL_ELEM>::const_iterator it = rplList_.begin();
-		for (; it != rplList_.end(); ++it) {
+		for (auto it = rplList_.cbegin(); it != rplList_.end(); ++it) {
 			if (!it->comment.empty() && it->section == TEXT("CustomReplace")) {
 				TCHAR key[64];
 				wsprintf(key, TEXT("%sPattern%d="), it->IsEnabled() ? TEXT("") : TEXT("#"), it->key);
@@ -1416,8 +1414,7 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		OutputMessageLog(TEXT("置換リストを再読み込みしました。"));
 	} else if (!lstrcmpi(cmd, TEXT("ra")) || !lstrcmpi(cmd, TEXT("rm"))) {
 		bool bFound = false;
-		std::vector<RPL_ELEM>::iterator it = rplList_.begin();
-		for (; it != rplList_.end(); ++it) {
+		for (auto it = rplList_.begin(); it != rplList_.end(); ++it) {
 			if (it->key / 10 == nArg && it->section == TEXT("CustomReplace")) {
 				bFound = true;
 				it->SetEnabled(cmd[1] == TEXT('a'));
@@ -2324,8 +2321,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				}
 			} else {
 				// 勢いリスト表示中
-				std::vector<FORCE_ELEM>::const_iterator it = forceList_.begin();
-				for (; it != forceList_.end(); ++it) {
+				for (auto it = forceList_.cbegin(); it != forceList_.end(); ++it) {
 					TCHAR text[_countof(it->name) + 64];
 					wsprintf(text, TEXT("jk%d (%s) 勢い：%d"), it->jkID, it->name, it->force);
 					ListBox_AddString(hList, text);

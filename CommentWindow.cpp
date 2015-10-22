@@ -430,8 +430,7 @@ void CCommentWindow::Forward(int duration)
 
 	if (duration > 0) {
 		rts_ += duration;
-		std::list<CHAT>::const_iterator it = chatList_.begin();
-		while (it != chatList_.end()) {
+		for (auto it = chatList_.cbegin(); it != chatList_.end(); ) {
 			// 表示期限切れのコメントを追い出す
 			// タイムスタンプの計算は2^32を法とする合同式
 			if (DWORD_MSB(it->pts + displayDuration_ - rts_)) {
@@ -443,8 +442,7 @@ void CCommentWindow::Forward(int duration)
 				++it;
 			}
 		}
-		it = chatPoolList_.begin();
-		while (it != chatPoolList_.end()) {
+		for (auto it = chatPoolList_.cbegin(); it != chatPoolList_.end(); ) {
 			if (DWORD_MSB(it->pts + displayDuration_ - rts_)) {
 				it = chatPoolList_.erase(it);
 			} else {
@@ -800,8 +798,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 		}
 		Gdiplus::GraphicsPath grPath;
 
-		std::list<CHAT>::iterator it = chatList_.begin();
-		for (; it != chatList_.end(); ++it) {
+		for (std::list<CHAT>::iterator it = chatList_.begin(); it != chatList_.end(); ++it) {
 			const Gdiplus::Font *pFont = it->bMultiLine ? &(it->bSmall ? fontMultiSmall : fontMulti) : &(it->bSmall ? fontSmall : font);
 			if (currentWindowWidth_ < 0) {
 				// 実際の描画サイズを計測
@@ -984,12 +981,11 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 		currentWindowWidth_ = width;
 
 		// 使われなかったテクスチャを消す
-		std::list<TEXTURE>::iterator jt = textureList_.begin();
-		while (jt != textureList_.end()) {
-			if (!jt->bUsed) {
-				jt = textureList_.erase(jt);
+		for (std::list<TEXTURE>::iterator it = textureList_.begin(); it != textureList_.end(); ) {
+			if (!it->bUsed) {
+				it = textureList_.erase(it);
 			} else {
-				(jt++)->bUsed = false;
+				(it++)->bUsed = false;
 			}
 		}
 
