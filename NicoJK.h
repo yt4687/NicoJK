@@ -96,9 +96,6 @@ private:
 		bool IsEnabled() const { return !pattern.empty() && TEXT('a') <= pattern[0] && pattern[0] <= TEXT('z'); }
 		void SetEnabled(bool b);
 		bool SetPattern(LPCTSTR patt);
-		struct COMPARE {
-			bool operator()(const RPL_ELEM &l, const RPL_ELEM &r) { return l.key < r.key; }
-		};
 	};
 	bool TogglePlugin(bool bEnabled);
 	void ToggleStreamCallback(bool bSet);

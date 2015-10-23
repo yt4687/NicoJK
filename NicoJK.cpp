@@ -301,10 +301,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			// ネットワーク未接続でもログフォルダにあるチャンネルを勢い窓に表示できるようにするため
 			forceList_.clear();
 			if (s_.logfileFolder[0]) {
-				std::vector<WIN32_FIND_DATA> findList;
 				TCHAR pattern[_countof(s_.logfileFolder) + 64];
 				wsprintf(pattern, TEXT("%s\\jk*"), s_.logfileFolder);
-				GetFindFileList(pattern, &findList);
+				std::vector<WIN32_FIND_DATA> findList = GetFindFileList(pattern);
 				for (size_t i = 0; i < findList.size(); ++i) {
 					FORCE_ELEM e;
 					if (!StrCmpNI(findList[i].cFileName, TEXT("jk"), 2) && (e.jkID = StrToInt(&findList[i].cFileName[2])) > 0) {
@@ -313,7 +312,8 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 						f.jkID = e.jkID;
 						f.name = TEXT("");
 						const JKID_NAME_ELEM *p = std::lower_bound(
-							DEFAULT_JKID_NAME_TABLE, &DEFAULT_JKID_NAME_TABLE[_countof(DEFAULT_JKID_NAME_TABLE)], f, JKID_NAME_ELEM::COMPARE());
+							DEFAULT_JKID_NAME_TABLE, &DEFAULT_JKID_NAME_TABLE[_countof(DEFAULT_JKID_NAME_TABLE)], f,
+							[](const JKID_NAME_ELEM &a, const JKID_NAME_ELEM &b) { return a.jkID < b.jkID; });
 						if (p && p->jkID == f.jkID) {
 							f.name = p->name;
 						}
@@ -321,9 +321,8 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 						// 今後チャンネル移動などあるかもしれないので確実ではないことを示す"?"
 						lstrcat(e.name, TEXT("?"));
 						e.force = 0;
-						std::vector<FORCE_ELEM>::const_iterator it = forceList_.begin();
-						for (; it != forceList_.end() && it->jkID < e.jkID; ++it);
-						forceList_.insert(it, e);
+						forceList_.insert(std::lower_bound(forceList_.begin(), forceList_.end(), e,
+							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; }), e);
 					}
 				}
 			}
@@ -552,7 +551,8 @@ void CNicoJK::LoadFromIni()
 			// 設定ファイルの定義では上位と下位をひっくり返しているので補正
 			e.ntsID = (e.ntsID<<16) | (e.ntsID>>16);
 			std::vector<NETWORK_SERVICE_ID_ELEM>::iterator it =
-				std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e, NETWORK_SERVICE_ID_ELEM::COMPARE());
+				std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e,
+					[](const NETWORK_SERVICE_ID_ELEM &a, const NETWORK_SERVICE_ID_ELEM &b) { return a.ntsID < b.ntsID; });
 			if (it != ntsIDList_.end() && it->ntsID == e.ntsID) {
 				*it = e;
 			} else {
@@ -602,7 +602,7 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 			}
 		}
 	}
-	std::sort(pRplList->begin() + lastSize, pRplList->end(), RPL_ELEM::COMPARE());
+	std::sort(pRplList->begin() + lastSize, pRplList->end(), [](const RPL_ELEM &a, const RPL_ELEM &b) { return a.key < b.key; });
 }
 
 void CNicoJK::SaveRplListToIni(LPCTSTR section, const std::vector<RPL_ELEM> &rplList, bool bClearSection)
@@ -852,20 +852,22 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 			// 指定ファイル再生
 			lstrcpyn(path, tmpSpecFileName_, _countof(path));
 		} else {
-			// jkIDのログファイル一覧を名前順で得る
-			std::vector<WIN32_FIND_DATA> findList;
-			std::vector<LPWIN32_FIND_DATA> sortedList;
+			// jkIDのログファイル一覧を得る
 			TCHAR pattern[_countof(s_.logfileFolder) + 64];
 			wsprintf(pattern, TEXT("%s\\jk%d\\??????????.txt"), s_.logfileFolder, jkID);
-			GetFindFileList(pattern, &findList, &sortedList);
+			std::vector<WIN32_FIND_DATA> findList = GetFindFileList(pattern);
 			// tmToRead以前でもっとも新しいログファイルを探す
-			WIN32_FIND_DATA findData;
-			wsprintf(findData.cFileName, TEXT("%010u.txt"), tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
-			std::vector<LPWIN32_FIND_DATA>::const_iterator it =
-				std::lower_bound(sortedList.begin(), sortedList.end(), &findData, LPWIN32_FIND_DATA_COMPARE());
-			if (it != sortedList.begin()) {
+			TCHAR target[64];
+			wsprintf(target, TEXT("%010u.txt"), tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
+			auto itMax = findList.cend();
+			for (auto it = findList.cbegin(); it != findList.end(); ++it) {
+				if (lstrcmpi(it->cFileName, target) < 0 && (itMax == findList.end() || lstrcmpi(it->cFileName, itMax->cFileName) > 0)) {
+					itMax = it;
+				}
+			}
+			if (itMax != findList.end()) {
 				// 見つかった
-				wsprintf(path, TEXT("%s\\jk%d\\%.14s"), s_.logfileFolder, jkID, (*(--it))->cFileName);
+				wsprintf(path, TEXT("%s\\jk%d\\%.14s"), s_.logfileFolder, jkID, itMax->cFileName);
 			}
 		}
 		if (path[0]) {
@@ -1989,7 +1991,8 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							NETWORK_SERVICE_ID_ELEM e = {};
 							for (int i = 0; GetChannelNetworkServiceID(currentTuning, i, &e.ntsID); ++i) {
 								std::vector<NETWORK_SERVICE_ID_ELEM>::const_iterator it =
-									std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e, NETWORK_SERVICE_ID_ELEM::COMPARE());
+									std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e,
+										[](const NETWORK_SERVICE_ID_ELEM &a, const NETWORK_SERVICE_ID_ELEM &b) { return a.ntsID < b.ntsID; });
 								int chJK = it!=ntsIDList_.end() && it->ntsID==e.ntsID ? it->jkID : -1;
 								// 実況IDが一致するチャンネルに切替
 								// 実況IDからチャンネルへの対応は一般に一意ではないので優先度を設ける
@@ -2009,7 +2012,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				int index = ListBox_GetCurSel((HWND)lParam);
 				if (bDisplayLogList_ && 0 <= index && index < (int)logList_.size()) {
 					std::list<LOG_ELEM>::const_iterator it = logList_.begin();
-					for (int i = 0; i < index; ++i, ++it);
+					std::advance(it, index);
 					if (it->marker[0] != TEXT('#') && it->marker[0] != TEXT('.')) {
 						// ユーザーNGの置換パターンをつくる
 						RPL_ELEM e;
@@ -2022,8 +2025,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							// 既存パターンかどうか調べる
 							std::vector<RPL_ELEM> autoRplList;
 							LoadRplListFromIni(TEXT("AutoReplace"), &autoRplList);
-							std::vector<RPL_ELEM>::const_iterator jt = autoRplList.begin();
-							for (; jt != autoRplList.end() && jt->pattern != e.pattern; ++jt);
+							auto jt = std::find_if(autoRplList.cbegin(), autoRplList.cend(), [&](const RPL_ELEM &a) { return a.pattern == e.pattern; });
 							// メッセージボックスで確認
 							TCHAR header[_countof(it->marker) + 32];
 							wsprintf(header, TEXT(">>%d ID:%s\n"), it->no, it->marker);
@@ -2182,7 +2184,8 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				KillTimer(hwnd, TIMER_SETUP_CURJK);
 				NETWORK_SERVICE_ID_ELEM e = {GetCurrentNetworkServiceID(), 0};
 				std::vector<NETWORK_SERVICE_ID_ELEM>::const_iterator it =
-					std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e, NETWORK_SERVICE_ID_ELEM::COMPARE());
+					std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e,
+						[](const NETWORK_SERVICE_ID_ELEM &a, const NETWORK_SERVICE_ID_ELEM &b) { return a.ntsID < b.ntsID; });
 				int jkID = it!=ntsIDList_.end() && (it->ntsID==e.ntsID || !(e.ntsID&0xFFFF) && e.ntsID==(it->ntsID&0xFFFF0000)) && it->jkID > 0 ?
 					(it->jkID & ~NETWORK_SERVICE_ID_ELEM::JKID_PRIOR) : -1;
 				if (currentJKToGet_ != jkID) {

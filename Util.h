@@ -19,15 +19,11 @@ unsigned int FileTimeToUnixTime(const FILETIME &ft);
 FILETIME &operator+=(FILETIME &ft, LONGLONG offset);
 LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2);
 bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst);
-void GetFindFileList(LPCTSTR pattern, std::vector<WIN32_FIND_DATA> *pList, std::vector<LPWIN32_FIND_DATA> *pSortedList = NULL);
+std::vector<WIN32_FIND_DATA> GetFindFileList(LPCTSTR pattern);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);
-
-struct LPWIN32_FIND_DATA_COMPARE {
-	bool operator()(const WIN32_FIND_DATA *l, const WIN32_FIND_DATA *r) { return lstrcmpi(l->cFileName, r->cFileName) < 0; }
-};
 
 class CCriticalLock
 {

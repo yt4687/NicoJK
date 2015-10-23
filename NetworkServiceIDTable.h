@@ -5,9 +5,6 @@
 	DWORD ntsID;
 	// ntsIDに対応する実況ID、負値は対応無しを表す
 	int jkID;
-	struct COMPARE {
-		bool operator()(const NETWORK_SERVICE_ID_ELEM &l, const NETWORK_SERVICE_ID_ELEM &r) { return l.ntsID < r.ntsID; }
-	};
 };
 
 // 別にここまでケチる必要もないけど

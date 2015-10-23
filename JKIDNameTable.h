@@ -1,9 +1,6 @@
 ﻿struct JKID_NAME_ELEM {
 	int jkID;
 	LPCTSTR name;
-	struct COMPARE {
-		bool operator()(const JKID_NAME_ELEM &l, const JKID_NAME_ELEM &r) { return l.jkID < r.jkID; }
-	};
 };
 
 static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
