@@ -95,7 +95,7 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 			return -1;
 		}
 		WSAAsyncSelect(soc_, hwnd_, msg_, FD_WRITE | FD_READ | FD_CLOSE);
-		struct sockaddr_in addr = {0};
+		struct sockaddr_in addr = {};
 		addr.sin_family = AF_INET;
 		addr.sin_addr.s_addr = imAddr;
 		addr.sin_port = htons(port_);

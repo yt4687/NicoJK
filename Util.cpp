@@ -285,7 +285,7 @@ void GetFindFileList(LPCTSTR pattern, std::vector<WIN32_FIND_DATA> *pList, std::
 // ファイルを開くダイアログ
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile)
 {
-	OPENFILENAME ofn = {0};
+	OPENFILENAME ofn = {};
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = hwndOwner;
 	ofn.lpstrFilter = lpstrFilter;
@@ -447,7 +447,7 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 	HANDLE hReadPipe, hWritePipe;
 	if (CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
 		{
-			STARTUPINFO si = {0};
+			STARTUPINFO si = {};
 			si.cb = sizeof(si);
 			si.dwFlags = STARTF_USESTDHANDLES;
 			si.hStdOutput = hWritePipe;

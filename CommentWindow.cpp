@@ -58,7 +58,7 @@ static void ApplyOpacity(DWORD *pBits, int range, BYTE opacityA, BYTE opacityRGB
 bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bool bSetHookOsdCompositor)
 {
 	if (!hinst_) {
-		WNDCLASSEX wc = {0};
+		WNDCLASSEX wc = {};
 		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.lpfnWndProc = WndProc;
 		wc.hInstance = hinst;
@@ -311,7 +311,7 @@ bool CCommentWindow::AllocateWorkBitmap(int width, int height, bool *pbRealloc)
 	if (!hdcWork_) {
 		return false;
 	}
-	BITMAPINFO bmi = {0};
+	BITMAPINFO bmi = {};
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = width;
 	bmi.bmiHeader.biHeight = height;
@@ -341,7 +341,7 @@ void CCommentWindow::OnParentSize()
 			RECT rc;
 			if (osdCompositor_.GetSurfaceRect(&rc) && rc.right-rc.left > 0 && rc.bottom-rc.top > 0) {
 				// 左上と右下にテクスチャ登録することでOSDの描画領域を動画全体に拡げる
-				BITMAPINFO bmi = {0};
+				BITMAPINFO bmi = {};
 				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 				bmi.bmiHeader.biWidth = 1;
 				bmi.bmiHeader.biHeight = 1;

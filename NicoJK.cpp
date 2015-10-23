@@ -1181,7 +1181,7 @@ BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 						RECT rc;
 						HWND hwndFull = pThis->GetFullscreenWindow();
 						GetClientRect(hwndFull ? hwndFull : pThis->m_pApp->GetAppWindow(), &rc);
-						POINT pt = {0};
+						POINT pt = {};
 						DragQueryPoint(reinterpret_cast<HDROP>(wParam), &pt);
 						SendDlgItemMessage(pThis->hForce_, IDC_CHECK_RELATIVE, BM_SETCHECK, pt.x > rc.right / 2 ? BST_CHECKED : BST_UNCHECKED, 0);
 					}
@@ -1986,7 +1986,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						// 本体のチャンネル切り替えをする
 						int currentTuning = m_pApp->GetTuningSpace();
 						for (int stage = 0; stage < 2; ++stage) {
-							NETWORK_SERVICE_ID_ELEM e = {0};
+							NETWORK_SERVICE_ID_ELEM e = {};
 							for (int i = 0; GetChannelNetworkServiceID(currentTuning, i, &e.ntsID); ++i) {
 								std::vector<NETWORK_SERVICE_ID_ELEM>::const_iterator it =
 									std::lower_bound(ntsIDList_.begin(), ntsIDList_.end(), e, NETWORK_SERVICE_ID_ELEM::COMPARE());
