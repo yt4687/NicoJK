@@ -2640,7 +2640,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			if (cookie_[0]) {
 				// ボタン類が入力ボックスと被らないようにする
 				int swShow = rcParent.bottom-rc.top-padding < -4 ? SW_HIDE : SW_SHOW;
-				if (uMsg == WM_SHOWWINDOW || (IsWindowVisible(GetDlgItem(hwnd, IDC_RADIO_FORCE)) != FALSE) != (swShow != SW_HIDE)) {
+				if (uMsg == WM_SHOWWINDOW || (GetWindowLong(GetDlgItem(hwnd, IDC_RADIO_FORCE), GWL_STYLE) & WS_VISIBLE ? true : false) != (swShow != SW_HIDE)) {
 					ShowWindow(GetDlgItem(hwnd, IDC_RADIO_FORCE), swShow);
 					ShowWindow(GetDlgItem(hwnd, IDC_RADIO_LOG), swShow);
 					ShowWindow(GetDlgItem(hwnd, IDC_CHECK_SPECFILE), swShow);
