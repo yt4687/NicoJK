@@ -334,7 +334,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
 				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
 					cookie_[0] = '\0';
-					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。");
+					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。", TVTest::LOG_TYPE_ERROR);
 				} else {
 					// 改行->';'
 					StrTrimA(cookie_, " \t\n\r");
@@ -596,7 +596,7 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 			if (!e.SetPattern(val)) {
 				TCHAR text[64];
 				wsprintf(text, TEXT("%sの正規表現が異常です。"), key);
-				m_pApp->AddLog(text);
+				m_pApp->AddLog(text, TVTest::LOG_TYPE_ERROR);
 			} else {
 				pRplList->push_back(e);
 			}
