@@ -1460,6 +1460,9 @@ static LRESULT CALLBACK ForceListBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 			}
 		}
 		break;
+	case WM_GETDLGCODE:
+		// 本体のアクセラレータを抑制するため
+		return DLGC_WANTARROWS;
 	}
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
@@ -1519,6 +1522,9 @@ static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam
 			}
 		}
 		break;
+	case WM_GETDLGCODE:
+		// 本体のアクセラレータを抑制するため
+		return DLGC_WANTALLKEYS;
 	}
 	return CallWindowProc(reinterpret_cast<WNDPROC>(GetProp(hwnd, TEXT("DefProc"))), hwnd, uMsg, wParam, lParam);
 }
