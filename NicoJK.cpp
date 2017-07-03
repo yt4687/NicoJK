@@ -306,10 +306,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			if (s_.logfileFolder[0]) {
 				TCHAR pattern[_countof(s_.logfileFolder) + 64];
 				wsprintf(pattern, TEXT("%s\\jk*"), s_.logfileFolder);
-				std::vector<WIN32_FIND_DATA> findList = GetFindFileList(pattern);
-				for (size_t i = 0; i < findList.size(); ++i) {
+				EnumFindFile(pattern, [this](const WIN32_FIND_DATA &fd) {
 					FORCE_ELEM e;
-					if (!StrCmpNI(findList[i].cFileName, TEXT("jk"), 2) && (e.jkID = StrToInt(&findList[i].cFileName[2])) > 0) {
+					if (!StrCmpNI(fd.cFileName, TEXT("jk"), 2) && (e.jkID = StrToInt(&fd.cFileName[2])) > 0) {
 						// とりあえず組み込みのチャンネル名を設定しておく
 						JKID_NAME_ELEM f;
 						f.jkID = e.jkID;
@@ -327,7 +326,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 						forceList_.insert(std::lower_bound(forceList_.begin(), forceList_.end(), e,
 							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; }), e);
 					}
-				}
+				});
 			}
 			// 必要ならサーバに渡すCookieを取得
 			cookie_[0] = '\0';
@@ -858,19 +857,18 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 			// jkIDのログファイル一覧を得る
 			TCHAR pattern[_countof(s_.logfileFolder) + 64];
 			wsprintf(pattern, TEXT("%s\\jk%d\\??????????.txt"), s_.logfileFolder, jkID);
-			std::vector<WIN32_FIND_DATA> findList = GetFindFileList(pattern);
 			// tmToRead以前でもっとも新しいログファイルを探す
 			TCHAR target[64];
 			wsprintf(target, TEXT("%010u.txt"), tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
-			auto itMax = findList.cend();
-			for (auto it = findList.cbegin(); it != findList.end(); ++it) {
-				if (lstrcmpi(it->cFileName, target) < 0 && (itMax == findList.end() || lstrcmpi(it->cFileName, itMax->cFileName) > 0)) {
-					itMax = it;
+			TCHAR latest[16] = {};
+			EnumFindFile(pattern, [&target, &latest](const WIN32_FIND_DATA &fd) {
+				if (lstrcmpi(fd.cFileName, target) < 0 && (!latest[0] || lstrcmpi(fd.cFileName, latest) > 0) && lstrlen(fd.cFileName) == 14) {
+					lstrcpy(latest, fd.cFileName);
 				}
-			}
-			if (itMax != findList.end()) {
+			});
+			if (latest[0]) {
 				// 見つかった
-				wsprintf(path, TEXT("%s\\jk%d\\%.14s"), s_.logfileFolder, jkID, itMax->cFileName);
+				wsprintf(path, TEXT("%s\\jk%d\\%s"), s_.logfileFolder, jkID, latest);
 			}
 		}
 		if (path[0]) {

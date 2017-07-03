@@ -260,21 +260,6 @@ bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst)
 	return true;
 }
 
-// FindFirstFile()の結果をstd::vectorで返す
-std::vector<WIN32_FIND_DATA> GetFindFileList(LPCTSTR pattern)
-{
-	std::vector<WIN32_FIND_DATA> list;
-	WIN32_FIND_DATA findData;
-	HANDLE hFind = FindFirstFile(pattern, &findData);
-	if (hFind != INVALID_HANDLE_VALUE) {
-		do {
-			list.push_back(findData);
-		} while (FindNextFile(hFind, &findData));
-		FindClose(hFind);
-	}
-	return list;
-}
-
 // ファイルを開くダイアログ
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile)
 {

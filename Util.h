@@ -19,11 +19,24 @@ unsigned int FileTimeToUnixTime(const FILETIME &ft);
 FILETIME &operator+=(FILETIME &ft, LONGLONG offset);
 LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2);
 bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst);
-std::vector<WIN32_FIND_DATA> GetFindFileList(LPCTSTR pattern);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);
+
+// FindFirstFile()の結果を列挙する
+template<class P>
+void EnumFindFile(LPCTSTR pattern, P enumProc)
+{
+	WIN32_FIND_DATA findData;
+	HANDLE hFind = FindFirstFile(pattern, &findData);
+	if (hFind != INVALID_HANDLE_VALUE) {
+		do {
+			enumProc(findData);
+		} while (FindNextFile(hFind, &findData));
+		FindClose(hFind);
+	}
+}
 
 class CCriticalLock
 {
