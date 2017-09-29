@@ -2515,7 +2515,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		return TRUE;
 	case WMS_POST:
 		{
-			static const std::regex rePostkey("postkey=([0-9A-Za-z\\-_]+)");
+			static const std::regex rePostkey("postkey=([0-9A-Za-z\\-_.]+)");
 			static const std::regex reThread("^<thread[^>]*? thread=\"(\\d+)\"");
 			static const std::regex reTicket("^<thread[^>]*? ticket=\"(.+?)\"");
 			static const std::regex reServerTime("^<thread[^>]*? server_time=\"(\\d+)\"");
