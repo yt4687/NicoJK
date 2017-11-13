@@ -181,7 +181,7 @@ COLORREF GetColor(const char *command)
 	static const std::regex re("(?:^| )#([0-9A-Fa-f]{6})(?: |$)");
 	std::cmatch m;
 	if (std::regex_search(command, m, re)) {
-		int color = strtol(m[1].first, NULL, 16);
+		int color = strtol(m[1].first, nullptr, 16);
 		return RGB((color>>16)&0xFF, (color>>8)&0xFF, color&0xFF);
 	}
 	for (int i = 0; i < _countof(COMMAND2COLOR); ++i) {
@@ -198,7 +198,7 @@ bool GetChatDate(unsigned int *tm, const char *tag)
 	static const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
 	std::cmatch m;
 	if (std::regex_search(tag, m, re)) {
-		*tm = strtoul(m[1].first, NULL, 10);
+		*tm = strtoul(m[1].first, nullptr, 10);
 		return true;
 	}
 	return false;
@@ -278,7 +278,7 @@ BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD
 // ローカル形式をタイムシフトする
 static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
 {
-	FILE *fpDest = NULL;
+	FILE *fpDest = nullptr;
 	FILE *fpSrc;
 	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".txt")) && !_tfopen_s(&fpSrc, srcPath, TEXT("r"))) {
 		const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
@@ -289,11 +289,11 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 			if (std::regex_search(buf, m, re)) {
 				// chatタグが1行以上見つかれば書き込みを始める
 				if (!fpDest && _tfopen_s(&fpDest, destPath, TEXT("w"))) {
-					fpDest = NULL;
+					fpDest = nullptr;
 					break;
 				}
 				fwrite(buf, sizeof(char), m[1].first - buf, fpDest);
-				unsigned int tm = strtoul(m[1].first, NULL, 10);
+				unsigned int tm = strtoul(m[1].first, nullptr, 10);
 				if (!tmOld) {
 					tmOld = tm;
 				}
@@ -306,13 +306,13 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (fpDest) {
 		fclose(fpDest);
 	}
-	return fpDest != NULL;
+	return fpDest != nullptr;
 }
 
 static void WriteChatTag(FILE *fpDest, const std::cmatch &m, unsigned int *ptmOld, unsigned int tmNew)
 {
 	fwrite(m[0].first, sizeof(char), m[1].first - m[0].first, fpDest);
-	unsigned int tm = strtoul(m[1].first, NULL, 10);
+	unsigned int tm = strtoul(m[1].first, nullptr, 10);
 	if (!*ptmOld) {
 		*ptmOld = tm;
 	}
@@ -335,12 +335,12 @@ static void WriteChatTag(FILE *fpDest, const std::cmatch &m, unsigned int *ptmOl
 // JikkyoRec.jklをローカル形式に変換する
 static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
 {
-	FILE *fpDest = NULL;
+	FILE *fpDest = nullptr;
 	FILE *fpSrc;
 	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".jkl")) && !_tfopen_s(&fpSrc, srcPath, TEXT("rb"))) {
 		char buf[4096];
 		if (fread(buf, sizeof(char), 10, fpSrc) != 10 || memcmp(buf, "<JikkyoRec", 10) || _tfopen_s(&fpDest, destPath, TEXT("w"))) {
-			fpDest = NULL;
+			fpDest = nullptr;
 		} else {
 			// 空行まで読み飛ばす
 			int c;
@@ -369,18 +369,18 @@ static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (fpDest) {
 		fclose(fpDest);
 	}
-	return fpDest != NULL;
+	return fpDest != nullptr;
 }
 
 // ニコニコ実況コメントビューア.xmlをローカル形式に変換する
 static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
 {
-	FILE *fpDest = NULL;
+	FILE *fpDest = nullptr;
 	FILE *fpSrc;
 	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".xml")) && !_tfopen_s(&fpSrc, srcPath, TEXT("r"))) {
 		char buf[4096];
 		if (!fgets(buf, _countof(buf), fpSrc) || !strstr(buf, "<?xml") || _tfopen_s(&fpDest, destPath, TEXT("w"))) {
-			fpDest = NULL;
+			fpDest = nullptr;
 		} else {
 			const std::regex re("<chat[^>]*? date=\"(\\d+)\"[^]*?</chat>");
 			std::cmatch m;
@@ -404,7 +404,7 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (fpDest) {
 		fclose(fpDest);
 	}
-	return fpDest != NULL;
+	return fpDest != nullptr;
 }
 
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
@@ -420,7 +420,7 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 	bool bRet = false;
 	SECURITY_ATTRIBUTES sa;
 	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
+	sa.lpSecurityDescriptor = nullptr;
 	sa.bInheritHandle = TRUE;
 	HANDLE hReadPipe, hWritePipe;
 	if (CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
@@ -431,7 +431,7 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 			si.hStdOutput = hWritePipe;
 			PROCESS_INFORMATION pi;
 			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + lstrlen(commandLine) + 1);
-			if (CreateProcess(NULL, &commandLineBuf.front(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, currentDir, &si, &pi)) {
+			if (CreateProcess(nullptr, &commandLineBuf.front(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
 				int bufCount = 0;
 				bool bBreak = false;
 				bRet = true;
@@ -444,13 +444,13 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 						bRet = false;
 					}
 					DWORD avail;
-					if (PeekNamedPipe(hReadPipe, NULL, 0, NULL, &avail, NULL) && avail != 0) {
+					if (PeekNamedPipe(hReadPipe, nullptr, 0, nullptr, &avail, nullptr) && avail != 0) {
 						if (bufCount + (int)avail >= bufSize) {
 							bBreak = true;
 							bRet = false;
 						} else {
 							DWORD read;
-							if (ReadFile(hReadPipe, &buf[bufCount], avail, &read, NULL)) {
+							if (ReadFile(hReadPipe, &buf[bufCount], avail, &read, nullptr)) {
 								bufCount += read;
 							}
 						}
@@ -484,7 +484,7 @@ std::string UnprotectDpapiToString(const char *src)
 	DATA_BLOB in, out = {};
 	in.cbData = static_cast<DWORD>(blob.size());
 	in.pbData = blob.data();
-	if (!in.cbData || !CryptUnprotectData(&in, NULL, NULL, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &out) || !out.pbData) {
+	if (!in.cbData || !CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out) || !out.pbData) {
 		return "";
 	}
 	std::string ret(reinterpret_cast<char*>(out.pbData), out.cbData);

@@ -53,7 +53,7 @@ public:
 	void ClearChat();
 	void Forward(int duration);
 	void Update();
-	bool IsCreated() const { return hwnd_ != NULL; }
+	bool IsCreated() const { return hwnd_ != nullptr; }
 	void OnFilterGraphInitialized(IGraphBuilder *pGraphBuilder) { osdCompositor_.OnFilterGraphInitialized(pGraphBuilder); }
 	void OnFilterGraphFinalize(IGraphBuilder *pGraphBuilder) { osdCompositor_.OnFilterGraphFinalize(pGraphBuilder); }
 private:

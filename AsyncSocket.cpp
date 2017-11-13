@@ -2,13 +2,13 @@
 #include "AsyncSocket.h"
 
 CAsyncSocket::CAsyncSocket()
-	: hGethost_(NULL)
+	: hGethost_(nullptr)
 	, soc_(INVALID_SOCKET)
 	, bReady_(false)
 	, bShutdown_(false)
-	, hwnd_(NULL)
+	, hwnd_(nullptr)
 	, msg_(0)
-	, name_(NULL)
+	, name_(nullptr)
 	, port_(0)
 	, bKeepSession_(false)
 	, bDoHalfClose_(false)
@@ -22,7 +22,7 @@ CAsyncSocket::~CAsyncSocket()
 }
 
 // 非同期通信を開始する
-// すでに開始しているときは失敗するが、name==NULLのときは開いているソケットに送信データを追加する
+// すでに開始しているときは失敗するが、name==nullptrのときは開いているソケットに送信データを追加する
 bool CAsyncSocket::Send(HWND hwnd, UINT msg, const char *name, unsigned short port, const char *buf, int len, bool bKeepSession)
 {
 	if (len < 0) {
@@ -79,7 +79,7 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 	} else if (hGethost_) {
 		// 名前解決中
 		bool bValid = wParam == (WPARAM)hGethost_ && WSAGETASYNCERROR(lParam) == 0;
-		hGethost_ = NULL;
+		hGethost_ = nullptr;
 		if (bShutdown_) {
 			bShutdown_ = false;
 			return -1;
@@ -183,7 +183,7 @@ void CAsyncSocket::Close()
 {
 	if (hGethost_) {
 		WSACancelAsyncRequest(hGethost_);
-		hGethost_ = NULL;
+		hGethost_ = nullptr;
 	}
 	if (soc_ != INVALID_SOCKET) {
 		closesocket(soc_);

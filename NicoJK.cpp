@@ -78,8 +78,8 @@ bool CNicoJK::RPL_ELEM::SetPattern(LPCTSTR patt)
 	// ただし今のところ's/{regex}/{replace}/g'のみ対応(拡張可能)
 	// 先頭文字が大文字の場合はそのパターンが無効状態であることを示す
 	static const std::regex reBrace("[Ss](.)(.+?)\\1(.*?)\\1g");
-	std::vector<char> utf8(WideCharToMultiByte(CP_UTF8, 0, patt, -1, NULL, 0, NULL, NULL));
-	if (utf8.empty() || WideCharToMultiByte(CP_UTF8, 0, patt, -1, &utf8.front(), static_cast<int>(utf8.size()), NULL, NULL) == 0) {
+	std::vector<char> utf8(WideCharToMultiByte(CP_UTF8, 0, patt, -1, nullptr, 0, nullptr, nullptr));
+	if (utf8.empty() || WideCharToMultiByte(CP_UTF8, 0, patt, -1, &utf8.front(), static_cast<int>(utf8.size()), nullptr, nullptr) == 0) {
 		return false;
 	}
 	std::cmatch m;
@@ -98,16 +98,16 @@ bool CNicoJK::RPL_ELEM::SetPattern(LPCTSTR patt)
 
 CNicoJK::CNicoJK()
 	: bDragAcceptFiles_(false)
-	, hPanel_(NULL)
-	, hForce_(NULL)
-	, hForceFont_(NULL)
+	, hPanel_(nullptr)
+	, hForce_(nullptr)
+	, hForceFont_(nullptr)
 	, bDisplayLogList_(false)
 	, logListDisplayedSize_(0)
 	, bPendingTimerUpdateList_(false)
 	, lastUpdateListTick_(0)
 	, lastCalcWidth_(0)
 	, forwardTick_(0)
-	, hSyncThread_(NULL)
+	, hSyncThread_(nullptr)
 	, bQuitSyncThread_(false)
 	, bPendingTimerForward_(false)
 	, bHalfSkip_(false)
@@ -333,7 +333,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			TCHAR currDir[MAX_PATH];
 			if (s_.execGetCookie == TEXT("cmd /c echo ;")) {
 				lstrcpyA(cookie_, ";");
-			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(NULL, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
+			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(nullptr, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
 				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
 					cookie_[0] = '\0';
 					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。", TVTest::LOG_TYPE_ERROR);
@@ -361,9 +361,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			// 破棄のタイミングがややこしいので勢い窓のフォントはここで作る
 			if (!hForceFont_) {
 				LOGFONT lf = {};
-				HDC hdc = GetDC(NULL);
+				HDC hdc = GetDC(nullptr);
 				lf.lfHeight = -(s_.forceFontSize * GetDeviceCaps(hdc, LOGPIXELSY) / 72);
-				ReleaseDC(NULL, hdc);
+				ReleaseDC(nullptr, hdc);
 				lf.lfCharSet = SHIFTJIS_CHARSET;
 				lstrcpy(lf.lfFaceName, s_.forceFontName);
 				hForceFont_ = CreateFontIndirect(&lf);
@@ -372,11 +372,11 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			// 勢い窓作成
 			if (hPanel_) {
 				hForce_ = CreateWindowEx(0, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
-				                         WS_CHILD, 0, 0, 320, 240, hPanel_, NULL, g_hinstDLL, this);
+				                         WS_CHILD, 0, 0, 320, 240, hPanel_, nullptr, g_hinstDLL, this);
 			} else {
 				hForce_ = CreateWindowEx(WS_EX_WINDOWEDGE | WS_EX_TOOLWINDOW, TEXT("ru.jk.force"), TEXT("NicoJK - ニコニコ実況勢い"),
 				                         WS_CAPTION | WS_POPUP | WS_THICKFRAME | WS_SYSMENU,
-				                         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, NULL, NULL, g_hinstDLL, this);
+				                         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, nullptr, nullptr, g_hinstDLL, this);
 			}
 			if (hForce_) {
 				// ウィンドウコールバック関数を登録
@@ -391,14 +391,14 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 					// ここで"dwmapi.dll"を遅延読み込みしていることに注意(つまりXPではDwm*()を踏んではいけない)
 					if (GetVersionEx(&vi) && vi.dwMajorVersion >= 6 && SUCCEEDED(DwmIsCompositionEnabled(&bCompEnabled)) && bCompEnabled) {
 						bQuitSyncThread_ = false;
-						hSyncThread_ = reinterpret_cast<HANDLE>(_beginthreadex(NULL, 0, SyncThread, this, 0, NULL));
+						hSyncThread_ = reinterpret_cast<HANDLE>(_beginthreadex(nullptr, 0, SyncThread, this, 0, nullptr));
 						if (hSyncThread_) {
 							SetThreadPriority(hSyncThread_, THREAD_PRIORITY_ABOVE_NORMAL);
 						}
 					}
 					if (!hSyncThread_) {
 						m_pApp->AddLog(L"Aeroが無効のため設定timerIntervalのリフレッシュ同期機能はオフになります。");
-						SetTimer(hForce_, TIMER_FORWARD, 166667 / -s_.timerInterval, NULL);
+						SetTimer(hForce_, TIMER_FORWARD, 166667 / -s_.timerInterval, nullptr);
 					}
 				}
 				if (s_.dropLogfileMode != 0) {
@@ -407,14 +407,14 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 				}
 			}
 		}
-		return hForce_ != NULL;
+		return hForce_ != nullptr;
 	} else {
 		if (hForce_) {
 			DestroyWindow(hForce_);
 		}
 		if (hForceFont_) {
 			DeleteFont(hForceFont_);
-			hForceFont_ = NULL;
+			hForceFont_ = nullptr;
 		}
 		return true;
 	}
@@ -515,7 +515,7 @@ void CNicoJK::LoadFromIni()
 	TCHAR path[MAX_PATH], dir[MAX_PATH];
 	GetBufferedProfileString(pBuf, TEXT("logfileFolder"), TEXT("Plugins\\NicoJK"), path, _countof(path));
 	if (path[0] && PathIsRelative(path)) {
-		if (!GetLongModuleFileName(NULL, dir, _countof(dir)) || !PathRemoveFileSpec(dir) || !PathCombine(s_.logfileFolder, dir, path)) {
+		if (!GetLongModuleFileName(nullptr, dir, _countof(dir)) || !PathRemoveFileSpec(dir) || !PathCombine(s_.logfileFolder, dir, path)) {
 			s_.logfileFolder[0] = TEXT('\0');
 		}
 	} else {
@@ -610,7 +610,7 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 void CNicoJK::SaveRplListToIni(LPCTSTR section, const std::vector<RPL_ELEM> &rplList, bool bClearSection)
 {
 	if (bClearSection) {
-		WritePrivateProfileString(section, NULL, NULL, szIniFileName_);
+		WritePrivateProfileString(section, nullptr, nullptr, szIniFileName_);
 	}
 	for (auto it = rplList.cbegin(); it != rplList.end(); ++it) {
 		if (it->section == section) {
@@ -629,8 +629,8 @@ HWND CNicoJK::GetFullscreenWindow()
 		lstrcpynW(className, hostInfo.pszAppName, 48);
 		lstrcatW(className, L" Fullscreen");
 
-		HWND hwnd = NULL;
-		while ((hwnd = FindWindowExW(NULL, hwnd, className, NULL)) != NULL) {
+		HWND hwnd = nullptr;
+		while ((hwnd = FindWindowExW(nullptr, hwnd, className, nullptr)) != nullptr) {
 			DWORD pid;
 			GetWindowThreadProcessId(hwnd, &pid);
 			if (pid == GetCurrentProcessId()) {
@@ -638,7 +638,7 @@ HWND CNicoJK::GetFullscreenWindow()
 			}
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
@@ -656,7 +656,7 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 // TVTestのVideo Containerウィンドウを探す
 HWND CNicoJK::FindVideoContainer()
 {
-	HWND hwndFound = NULL;
+	HWND hwndFound = nullptr;
 	TVTest::HostInfo hostInfo;
 	if (m_pApp->GetHostInfo(&hostInfo)) {
 		TCHAR searchName[64];
@@ -751,7 +751,7 @@ bool CNicoJK::IsMatchDriverName(LPCTSTR drivers)
 	LPCTSTR name = PathFindFileName(path);
 	int len = lstrlen(name);
 	if (len > 0) {
-		for (LPCTSTR p = drivers; (p = StrStrI(p, name)) != NULL; p += len) {
+		for (LPCTSTR p = drivers; (p = StrStrI(p, name)) != nullptr; p += len) {
 			if ((p == drivers || p[-1] == TEXT(':')) && (p[len] == TEXT('\0') || p[len] == TEXT(':'))) {
 				return true;
 			}
@@ -783,16 +783,16 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 		unsigned int tm;
 		TCHAR dir[_countof(s_.logfileFolder) + 32];
 		wsprintf(dir, TEXT("%s\\jk%d"), s_.logfileFolder, jkID);
-		if (GetChatDate(&tm, text) && (PathFileExists(dir) || CreateDirectory(dir, NULL))) {
+		if (GetChatDate(&tm, text) && (PathFileExists(dir) || CreateDirectory(dir, nullptr))) {
 			// ロックファイルを開く
 			TCHAR lockPath[_countof(dir) + 32];
 			wsprintf(lockPath, TEXT("%s\\lockfile"), dir);
-			hLogfileLock_ = CreateFile(lockPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			hLogfileLock_ = CreateFile(lockPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (hLogfileLock_ != INVALID_HANDLE_VALUE) {
 				// 開く
 				TCHAR path[_countof(dir) + 32];
 				wsprintf(path, TEXT("%s\\%010u.txt"), dir, tm);
-				hLogfile_ = CreateFile(path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+				hLogfile_ = CreateFile(path, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 				if (hLogfile_ != INVALID_HANDLE_VALUE) {
 					// ヘッダを書き込む(別に無くてもいい)
 					FILETIME ftUtc, ft;
@@ -804,12 +804,12 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 					int len = wsprintfA(header, "<!-- NicoJK logfile from %04d-%02d-%02dT%02d:%02d:%02d -->\r\n",
 					                    st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 					DWORD written;
-					WriteFile(hLogfile_, header, len, &written, NULL);
+					WriteFile(hLogfile_, header, len, &written, nullptr);
 					currentLogfileJK_ = jkID;
 
 					TCHAR debug[_countof(path) + 64];
 					wsprintf(debug, TEXT("ログファイル\"%s\"の書き込みを開始しました。"),
-					         StrRChr(path, StrRChr(path, NULL, TEXT('\\')), TEXT('\\')) + 1);
+					         StrRChr(path, StrRChr(path, nullptr, TEXT('\\')), TEXT('\\')) + 1);
 					OutputMessageLog(debug);
 				} else {
 					CloseHandle(hLogfileLock_);
@@ -821,8 +821,8 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 	// 開いてたら書き込む
 	if (currentLogfileJK_ >= 0) {
 		DWORD written;
-		WriteFile(hLogfile_, text, lstrlenA(text), &written, NULL);
-		WriteFile(hLogfile_, "\r\n", 2, &written, NULL);
+		WriteFile(hLogfile_, text, lstrlenA(text), &written, nullptr);
+		WriteFile(hLogfile_, "\r\n", 2, &written, nullptr);
 	}
 }
 
@@ -990,10 +990,10 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 			case TVTest::PANEL_ITEM_EVENT_CREATE:
 				{
 					TVTest::PanelItemCreateEventInfo *pcei = reinterpret_cast<TVTest::PanelItemCreateEventInfo*>(lParam1);
-					pThis->hPanel_ = CreateWindowEx(0, TEXT("ru.jk.panel"), NULL, WS_CHILD | WS_VISIBLE,
+					pThis->hPanel_ = CreateWindowEx(0, TEXT("ru.jk.panel"), nullptr, WS_CHILD | WS_VISIBLE,
 					                                pcei->ItemRect.left, pcei->ItemRect.top,
 					                                pcei->ItemRect.right - pcei->ItemRect.left, pcei->ItemRect.bottom - pcei->ItemRect.top,
-					                                pcei->hwndParent, NULL, g_hinstDLL, pThis);
+					                                pcei->hwndParent, nullptr, g_hinstDLL, pThis);
 					if (pThis->hPanel_) {
 						pcei->hwndItem = pThis->hPanel_;
 						// このイベントはTVTest::EVENT_PLUGINENABLEよりも遅れるため
@@ -1010,7 +1010,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		if (pThis->hPanel_ && pThis->hForce_) {
 			DeleteBrush(SetClassLongPtr(pThis->hForce_, GCLP_HBRBACKGROUND,
 				reinterpret_cast<LONG_PTR>(CreateSolidBrush(pThis->m_pApp->GetColor(L"ControlPanelMargin")))));
-			InvalidateRect(pThis->hForce_, NULL, TRUE);
+			InvalidateRect(pThis->hForce_, nullptr, TRUE);
 		}
 		break;
 	case TVTest::EVENT_RECORDSTATUSCHANGE:
@@ -1062,7 +1062,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 		// サービスが変更された
 		if (pThis->hForce_) {
 			// 重複やザッピング対策のためタイマで呼ぶ
-			SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
+			SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, nullptr);
 		}
 		break;
 	case TVTest::EVENT_SERVICEUPDATE:
@@ -1071,7 +1071,7 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 			// ユーザの自発的なチャンネル変更(EVENT_CHANNELCHANGE)を捉えるのが原則だが
 			// 非チューナ系のBonDriverだとこれでは不十分なため
 			if (pThis->IsMatchDriverName(pThis->s_.nonTunerDrivers.c_str())) {
-				SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
+				SetTimer(pThis->hForce_, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, nullptr);
 			}
 		}
 		break;
@@ -1145,16 +1145,16 @@ BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 		break;
 	case WM_WINDOWPOSCHANGED:
 		// WM_ACTIVATEされないZオーダーの変化を捉える。フルスクリーンでもなぜか送られてくるので注意
-		SetTimer(pThis->hForce_, TIMER_DONE_POSCHANGE, 1000, NULL);
+		SetTimer(pThis->hForce_, TIMER_DONE_POSCHANGE, 1000, nullptr);
 		break;
 	case WM_MOVE:
 		pThis->commentWindow_.OnParentMove();
 		// 実際に捉えたいVideo Containerウィンドウの変化はすこし遅れるため
-		SetTimer(pThis->hForce_, TIMER_DONE_MOVE, 500, NULL);
+		SetTimer(pThis->hForce_, TIMER_DONE_MOVE, 500, nullptr);
 		break;
 	case WM_SIZE:
 		pThis->commentWindow_.OnParentSize();
-		SetTimer(pThis->hForce_, TIMER_DONE_SIZE, 500, NULL);
+		SetTimer(pThis->hForce_, TIMER_DONE_SIZE, 500, nullptr);
 		break;
 	case WM_DROPFILES:
 		if (pThis->s_.dropLogfileMode == 0) {
@@ -1169,7 +1169,7 @@ BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 		}
 		// 読み込み可能な拡張子をもつ最初にみつかったファイルを開く
 		pThis->dropFileTimeout_ = 0;
-		for (UINT i = DragQueryFile(reinterpret_cast<HDROP>(wParam), 0xFFFFFFFF, NULL, 0); i != 0; --i) {
+		for (UINT i = DragQueryFile(reinterpret_cast<HDROP>(wParam), 0xFFFFFFFF, nullptr, 0); i != 0; --i) {
 			if (DragQueryFile(reinterpret_cast<HDROP>(wParam), i - 1, pThis->dropFileName_, _countof(pThis->dropFileName_))) {
 				LPCTSTR ext = PathFindExtension(pThis->dropFileName_);
 				if (!lstrcmpi(ext, TEXT(".jkl")) || !lstrcmpi(ext, TEXT(".xml")) || !lstrcmpi(ext, TEXT(".txt"))) {
@@ -1190,7 +1190,7 @@ BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 					}
 					bool bRel = SendDlgItemMessage(pThis->hForce_, IDC_CHECK_RELATIVE, BM_GETCHECK, 0, 0) == BST_CHECKED;
 					pThis->dropFileTimeout_ = 10;
-					SetTimer(pThis->hForce_, TIMER_OPEN_DROPFILE, bRel ? 2000 : 0, NULL);
+					SetTimer(pThis->hForce_, TIMER_OPEN_DROPFILE, bRel ? 2000 : 0, nullptr);
 					break;
 				}
 			}
@@ -1486,7 +1486,7 @@ static LRESULT CALLBACK ForcePostEditBoxProc(HWND hwnd, UINT uMsg, WPARAM wParam
 				// クリップボードを取得
 				TCHAR clip[512];
 				clip[0] = TEXT('\0');
-				if (OpenClipboard(NULL)) {
+				if (OpenClipboard(nullptr)) {
 					HGLOBAL hg = GetClipboardData(CF_UNICODETEXT);
 					if (hg) {
 						LPWSTR pg = static_cast<LPWSTR>(GlobalLock(hg));
@@ -1544,7 +1544,7 @@ static LRESULT CALLBACK TVTestPanelButtonProc(HWND hwnd, UINT uMsg, WPARAM wPara
 			TCHAR text[256];
 			if (GetWindowText(hwnd, text, _countof(text))) {
 				HFONT hFont = reinterpret_cast<HFONT>(SendMessage(hwnd, WM_GETFONT, 0, 0));
-				HFONT hFontOld = NULL;
+				HFONT hFontOld = nullptr;
 				if (hFont) {
 					hFontOld = SelectFont(hdc, hFont);
 				}
@@ -1586,11 +1586,11 @@ LRESULT CALLBACK CNicoJK::PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
 		switch (uMsg) {
 		case WM_CREATE:
 			SetProp(hwnd, TEXT("IsHide"), reinterpret_cast<HANDLE>('N'));
-			SetTimer(hwnd, 1, 5000, NULL);
+			SetTimer(hwnd, 1, 5000, nullptr);
 			return TRUE;
 		case WM_DESTROY:
 			RemoveProp(hwnd, TEXT("IsHide"));
-			pThis->hPanel_ = NULL;
+			pThis->hPanel_ = nullptr;
 			break;
 		case WM_TIMER:
 			if (wParam == 1) {
@@ -1633,20 +1633,20 @@ bool CNicoJK::CreateForceWindowItems(HWND hwnd)
 {
 	int padding = hPanel_ ? 0 : 4;
 	if (CreateWindowEx(0, TEXT("BUTTON"), TEXT("勢い"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
-	        padding, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_FORCE), g_hinstDLL, NULL) &&
+	        padding, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_FORCE), g_hinstDLL, nullptr) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("ログ"), WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | BS_PUSHLIKE,
-	        padding + 60, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_LOG), g_hinstDLL, NULL) &&
+	        padding + 60, padding, 60, 24, hwnd, reinterpret_cast<HMENU>(IDC_RADIO_LOG), g_hinstDLL, nullptr) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("File"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-	        padding + 124, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_SPECFILE), g_hinstDLL, NULL) &&
+	        padding + 124, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_SPECFILE), g_hinstDLL, nullptr) &&
 	    CreateWindowEx(0, TEXT("BUTTON"), TEXT("Rel"), WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-	        padding + 174, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_RELATIVE), g_hinstDLL, NULL) &&
+	        padding + 174, padding + 4, 50, 16, hwnd, reinterpret_cast<HMENU>(IDC_CHECK_RELATIVE), g_hinstDLL, nullptr) &&
 	    // TODO: (描画がとても面倒なので)スライダーはパネルでは表示しない
 	    CreateWindowEx(0, TRACKBAR_CLASS, TEXT("不透明度"), WS_CHILD | WS_VISIBLE | TBS_BOTH | TBS_NOTICKS | TBS_TOOLTIPS,
-	        padding + 224, hPanel_ ? -100 : padding + 4, 64, 21, hwnd, reinterpret_cast<HMENU>(IDC_SLIDER_OPACITY), g_hinstDLL, NULL) &&
-	    CreateWindowEx(WS_EX_ACCEPTFILES, TEXT("LISTBOX"), NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_NOINTEGRALHEIGHT | LBS_HASSTRINGS | LBS_OWNERDRAWFIXED | LBS_NOTIFY,
-	        padding, padding + 24, 100, 100, hwnd, reinterpret_cast<HMENU>(IDC_FORCELIST), g_hinstDLL, NULL) &&
-	    CreateWindowEx(0, TEXT("COMBOBOX"), NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS,
-	        padding, padding + 124, 100, 50, hwnd, reinterpret_cast<HMENU>(IDC_CB_POST), g_hinstDLL, NULL))
+	        padding + 224, hPanel_ ? -100 : padding + 4, 64, 21, hwnd, reinterpret_cast<HMENU>(IDC_SLIDER_OPACITY), g_hinstDLL, nullptr) &&
+	    CreateWindowEx(WS_EX_ACCEPTFILES, TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_NOINTEGRALHEIGHT | LBS_HASSTRINGS | LBS_OWNERDRAWFIXED | LBS_NOTIFY,
+	        padding, padding + 24, 100, 100, hwnd, reinterpret_cast<HMENU>(IDC_FORCELIST), g_hinstDLL, nullptr) &&
+	    CreateWindowEx(0, TEXT("COMBOBOX"), nullptr, WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS,
+	        padding, padding + 124, 100, 50, hwnd, reinterpret_cast<HMENU>(IDC_CB_POST), g_hinstDLL, nullptr))
 	{
 		if (hForceFont_) {
 			SendDlgItemMessage(hwnd, IDC_RADIO_FORCE, WM_SETFONT, reinterpret_cast<WPARAM>(hForceFont_), 0);
@@ -1707,11 +1707,11 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SendDlgItemMessage(hwnd, IDC_SLIDER_OPACITY, TBM_SETRANGE, TRUE, MAKELPARAM(0, 10));
 			SendDlgItemMessage(hwnd, IDC_SLIDER_OPACITY, TBM_SETPOS, TRUE, (commentWindow_.GetOpacity() * 10 + 254) / 255);
 			SendMessage(hwnd, WM_COMMAND, MAKEWPARAM(IDC_CB_POST, CBN_EDITCHANGE), 0);
-			SetTimer(hwnd, TIMER_UPDATE, max(UPDATE_FORCE_INTERVAL, 10000), NULL);
+			SetTimer(hwnd, TIMER_UPDATE, max(UPDATE_FORCE_INTERVAL, 10000), nullptr);
 			if (s_.timerInterval >= 0) {
-				SetTimer(hwnd, TIMER_FORWARD, s_.timerInterval, NULL);
+				SetTimer(hwnd, TIMER_FORWARD, s_.timerInterval, nullptr);
 			}
-			SetTimer(hwnd, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, NULL);
+			SetTimer(hwnd, TIMER_SETUP_CURJK, SETUP_CURJK_DELAY, nullptr);
 			PostMessage(hwnd, WM_TIMER, TIMER_UPDATE, 0);
 			PostMessage(hwnd, WM_TIMER, TIMER_JK_WATCHDOG, 0);
 			if (hPanel_) {
@@ -1743,7 +1743,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				SendMessage(hwnd, WM_SET_ZORDER, 0, 0);
 			}
 			// TVTest起動直後はVideo Containerウィンドウの配置が定まっていないようなので再度整える
-			SetTimer(hwnd, TIMER_DONE_SIZE, 500, NULL);
+			SetTimer(hwnd, TIMER_DONE_SIZE, 500, nullptr);
 
 			// 勢いリストのサブクラス化
 			HWND hList = GetDlgItem(hwnd, IDC_FORCELIST);
@@ -1808,14 +1808,14 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				bQuitSyncThread_ = true;
 				WaitForSingleObject(hSyncThread_, INFINITE);
 				CloseHandle(hSyncThread_);
-				hSyncThread_ = NULL;
+				hSyncThread_ = nullptr;
 			}
 			ToggleStreamCallback(false);
-			m_pApp->SetWindowMessageCallback(NULL);
+			m_pApp->SetWindowMessageCallback(nullptr);
 			SaveToIni();
 			m_pApp->SetPluginCommandState(COMMAND_HIDE_FORCE, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
 			m_pApp->SetPluginCommandState(COMMAND_HIDE_COMMENT, TVTest::PLUGIN_COMMAND_STATE_DISABLED);
-			hForce_ = NULL;
+			hForce_ = nullptr;
 		}
 		break;
 	case WM_MEASUREITEM:
@@ -1848,7 +1848,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			SendDlgItemMessage(hwnd, IDC_CHECK_SPECFILE, BM_SETCHECK, BST_UNCHECKED, 0);
 			dropFileTimeout_ = 1;
-			SetTimer(hwnd, TIMER_OPEN_DROPFILE, 0, NULL);
+			SetTimer(hwnd, TIMER_OPEN_DROPFILE, 0, nullptr);
 		}
 		break;
 	case WM_HSCROLL:
@@ -1989,7 +1989,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						currentJKToGet_ = jkID;
 						jkSocket_.Shutdown();
 						commentWindow_.ClearChat();
-						SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, NULL);
+						SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 					}
 					if (s_.bSetChannel && !bUsingLogfileDriver_ && !bRecording_ && jkID > 0) {
 						// 本体のチャンネル切り替えをする
@@ -2102,11 +2102,11 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			break;
 		case TIMER_JK_WATCHDOG:
-			SetTimer(hwnd, TIMER_JK_WATCHDOG, max(JK_WATCHDOG_INTERVAL, 10000), NULL);
+			SetTimer(hwnd, TIMER_JK_WATCHDOG, max(JK_WATCHDOG_INTERVAL, 10000), nullptr);
 			if (jkLeaveThreadCheck_ > 0 && --jkLeaveThreadCheck_ == 0) {
 				OutputMessageLog(TEXT("leave_threadタグにより切断します。"));
 				jkSocket_.Shutdown();
-				SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, NULL);
+				SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 			}
 			if (currentJKToGet_ >= 0 && !bUsingLogfileDriver_) {
 				// パーマリンクを取得
@@ -2199,7 +2199,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					currentJKToGet_ = jkID;
 					jkSocket_.Shutdown();
 					commentWindow_.ClearChat();
-					SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, NULL);
+					SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 					// 選択項目を更新するため
 					SendMessage(hwnd, WM_UPDATE_LIST, TRUE, 0);
 				}
@@ -2265,7 +2265,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				}
 				if (lastUpdateListTick_ - tick < COMMENT_REDRAW_INTERVAL) {
 					bPendingTimerUpdateList_ = true;
-					SetTimer(hwnd, TIMER_UPDATE_LIST, COMMENT_REDRAW_INTERVAL - (lastUpdateListTick_ - tick), NULL);
+					SetTimer(hwnd, TIMER_UPDATE_LIST, COMMENT_REDRAW_INTERVAL - (lastUpdateListTick_ - tick), nullptr);
 					return TRUE;
 				}
 			}
@@ -2343,7 +2343,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			// 描画を再開
 			SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-			InvalidateRect(hList, NULL, FALSE);
+			InvalidateRect(hList, nullptr, FALSE);
 		}
 		return TRUE;
 	case WMS_FORCE:
@@ -2543,13 +2543,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					char u8comm[_countof(comm) * 3];
 					char u8mail[_countof(mail) * 3];
 					char u8commEnc[_countof(comm) * 5];
-					int len = WideCharToMultiByte(CP_UTF8, 0, comm, -1, u8comm, _countof(u8comm) - 1, NULL, NULL);
+					int len = WideCharToMultiByte(CP_UTF8, 0, comm, -1, u8comm, _countof(u8comm) - 1, nullptr, nullptr);
 					u8comm[len] = '\0';
-					len = WideCharToMultiByte(CP_UTF8, 0, mail, -1, u8mail, _countof(u8mail) - 1, NULL, NULL);
+					len = WideCharToMultiByte(CP_UTF8, 0, mail, -1, u8mail, _countof(u8mail) - 1, nullptr, nullptr);
 					u8mail[len] = '\0';
 					EncodeEntityReference(u8comm, u8commEnc, _countof(u8commEnc));
 					// vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
-					int vpos = (int)((LONGLONG)strtoul(mServerTime[1].first, NULL, 10) - strtoul(mThread[1].first, NULL, 10)) * 100 +
+					int vpos = (int)((LONGLONG)strtoul(mServerTime[1].first, nullptr, 10) - strtoul(mThread[1].first, nullptr, 10)) * 100 +
 					           (int)(GetTickCount() - commentServerResponseTick_) / 10;
 					if (std::regex_match(u8mail, reMailIsValid) && vpos >= 0) {
 						// コメント投稿
@@ -2559,7 +2559,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						wsprintfA(szRequest, szRequestTemplate, mThread[1].str().c_str(), mTicket[1].str().c_str(), vpos, mPostkey[1].str().c_str(),
 						          u8mail, s_.bAnonymity ? " 184" : "", getflvUserID_, (int)bGetflvIsPremium_, u8commEnc);
 						// '\0'まで送る
-						if (jkSocket_.Send(hwnd, WMS_JK, NULL, 0, szRequest, lstrlenA(szRequest) + 1, true)) {
+						if (jkSocket_.Send(hwnd, WMS_JK, nullptr, 0, szRequest, lstrlenA(szRequest) + 1, true)) {
 							lastPostTick_ = GetTickCount();
 							GetPostComboBoxText(lastPostComm_, _countof(lastPostComm_));
 							// アンドゥできるように選択削除で消す
@@ -2632,18 +2632,18 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			GetClientRect(hwnd, &rcParent);
 			HWND hItem = GetDlgItem(hwnd, IDC_CB_POST);
 			GetWindowRect(hItem, &rc);
-			MapWindowPoints(NULL, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
+			MapWindowPoints(nullptr, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
 			int padding = rc.left;
 			if (!cookie_[0]) {
 				// クッキーが設定されていなければ間違いなく投稿不能なので入力ボックスを表示しない
-				SetWindowPos(hItem, NULL, rc.left, rcParent.bottom, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
+				SetWindowPos(hItem, nullptr, rc.left, rcParent.bottom, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
 			} else {
 				padding += 6 + static_cast<int>(SendMessage(hItem, CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0));
-				SetWindowPos(hItem, NULL, rc.left, rcParent.bottom-padding, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
+				SetWindowPos(hItem, nullptr, rc.left, rcParent.bottom-padding, rcParent.right-rc.left*2, rc.bottom-rc.top, SWP_NOZORDER);
 			}
 			hItem = GetDlgItem(hwnd, IDC_FORCELIST);
 			GetWindowRect(hItem, &rc);
-			MapWindowPoints(NULL, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
+			MapWindowPoints(nullptr, hwnd, reinterpret_cast<LPPOINT>(&rc), 2);
 			if (cookie_[0]) {
 				// ボタン類が入力ボックスと被らないようにする
 				int swShow = rcParent.bottom-rc.top-padding < -4 ? SW_HIDE : SW_SHOW;
@@ -2655,7 +2655,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					ShowWindow(GetDlgItem(hwnd, IDC_SLIDER_OPACITY), swShow);
 				}
 			}
-			SetWindowPos(hItem, NULL, 0, 0, rcParent.right-rc.left*2, rcParent.bottom-rc.top-padding, SWP_NOMOVE | SWP_NOZORDER);
+			SetWindowPos(hItem, nullptr, 0, 0, rcParent.right-rc.left*2, rcParent.bottom-rc.top-padding, SWP_NOMOVE | SWP_NOZORDER);
 		}
 		break;
 	}
@@ -2753,7 +2753,7 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 		if (bHasAdaptation) {
 			// アダプテーションフィールドをスキップする
 			if (bAdaptationLength > 182) {
-				pPayload = NULL;
+				pPayload = nullptr;
 			} else {
 				pPayload += 1 + bAdaptationLength;
 			}

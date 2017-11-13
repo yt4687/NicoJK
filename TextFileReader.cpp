@@ -16,7 +16,7 @@ CTextFileReader::~CTextFileReader()
 bool CTextFileReader::Open(LPCTSTR path, DWORD shareMode, DWORD flagsAndAttributes)
 {
 	Close();
-	hFile_ = CreateFile(path, GENERIC_READ, shareMode, NULL, OPEN_EXISTING, flagsAndAttributes, NULL);
+	hFile_ = CreateFile(path, GENERIC_READ, shareMode, nullptr, OPEN_EXISTING, flagsAndAttributes, nullptr);
 	return IsOpen();
 }
 
@@ -34,7 +34,7 @@ void CTextFileReader::Close()
 bool CTextFileReader::ResetPointer()
 {
 	if (IsOpen()) {
-		if (SetFilePointer(hFile_, 0, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER) {
+		if (SetFilePointer(hFile_, 0, nullptr, FILE_BEGIN) != INVALID_SET_FILE_POINTER) {
 			bEof_ = false;
 			buf_[0] = '\0';
 			return true;
@@ -56,7 +56,7 @@ int CTextFileReader::ReadLine(char *text, int textMax)
 		if (!bEof_) {
 			int bufLen = lstrlenA(buf_);
 			DWORD read;
-			if (!ReadFile(hFile_, buf_ + bufLen, BUF_SIZE - bufLen - 1, &read, NULL)) {
+			if (!ReadFile(hFile_, buf_ + bufLen, BUF_SIZE - bufLen - 1, &read, nullptr)) {
 				buf_[bufLen] = '\0';
 				bEof_ = true;
 			} else {
@@ -95,13 +95,13 @@ int CTextFileReader::ReadLastLine(char *text, int textMax)
 		return 0;
 	}
 	// 2GB以上には対応しない
-	DWORD fileSize = GetFileSize(hFile_, NULL);
+	DWORD fileSize = GetFileSize(hFile_, nullptr);
 	if (fileSize > 0x7FFFFFFF ||
-	    SetFilePointer(hFile_, -min(textMax - 1, static_cast<int>(fileSize)), NULL, FILE_END) == INVALID_SET_FILE_POINTER) {
+	    SetFilePointer(hFile_, -min(textMax - 1, static_cast<int>(fileSize)), nullptr, FILE_END) == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}
 	DWORD read;
-	if (!ReadFile(hFile_, text, textMax - 1, &read, NULL)) {
+	if (!ReadFile(hFile_, text, textMax - 1, &read, nullptr)) {
 		ResetPointer();
 		return 0;
 	}
@@ -130,8 +130,8 @@ int CTextFileReader::Seek(int scale)
 	if (!IsOpen() || scale == 0) {
 		return 0;
 	}
-	DWORD fileSize = GetFileSize(hFile_, NULL);
-	DWORD filePos = SetFilePointer(hFile_, 0, NULL, FILE_CURRENT);
+	DWORD fileSize = GetFileSize(hFile_, nullptr);
+	DWORD filePos = SetFilePointer(hFile_, 0, nullptr, FILE_CURRENT);
 	if (fileSize > 0x7FFFFFFF || filePos == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}
@@ -140,7 +140,7 @@ int CTextFileReader::Seek(int scale)
 	if (nextPos == filePos) {
 		return 0;
 	}
-	nextPos = SetFilePointer(hFile_, nextPos, NULL, FILE_BEGIN);
+	nextPos = SetFilePointer(hFile_, nextPos, nullptr, FILE_BEGIN);
 	if (nextPos == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}

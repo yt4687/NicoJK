@@ -68,7 +68,7 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bo
 		}
 		// TVTest本体もGdiplusを使っているので遅延ロードはしない
 		Gdiplus::GdiplusStartupInput si;
-		if (Gdiplus::GdiplusStartup(&gdiplusToken_, &si, NULL) != Gdiplus::Ok) {
+		if (Gdiplus::GdiplusStartup(&gdiplusToken_, &si, nullptr) != Gdiplus::Ok) {
 			return false;
 		}
 		hinst_ = hinst;
@@ -97,29 +97,29 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bo
 
 void CCommentWindow::Finalize()
 {
-	pfnUpdateLayeredWindowIndirect_ = NULL;
+	pfnUpdateLayeredWindowIndirect_ = nullptr;
 	if (hinst_) {
         osdCompositor_.Uninitialize();
 		Gdiplus::GdiplusShutdown(gdiplusToken_);
 		UnregisterClass(TEXT("ru.jk.comment"), hinst_);
-		hinst_ = NULL;
+		hinst_ = nullptr;
 	}
 }
 
 CCommentWindow::CCommentWindow()
-	: hinst_(NULL)
+	: hinst_(nullptr)
 	, gdiplusToken_(0)
-	, pfnUpdateLayeredWindowIndirect_(NULL)
+	, pfnUpdateLayeredWindowIndirect_(nullptr)
 	, bWindows8_(false)
 	, bSse2Available_(false)
-	, hwnd_(NULL)
-	, hwndParent_(NULL)
-	, hbmWork_(NULL)
-	, pBits_(NULL)
-	, hdcWork_(NULL)
-	, hDrawingThread_(NULL)
-	, hDrawingEvent_(NULL)
-	, hDrawingIdleEvent_(NULL)
+	, hwnd_(nullptr)
+	, hwndParent_(nullptr)
+	, hbmWork_(nullptr)
+	, pBits_(nullptr)
+	, hdcWork_(nullptr)
+	, hDrawingThread_(nullptr)
+	, hDrawingEvent_(nullptr)
+	, hDrawingIdleEvent_(nullptr)
 	, bQuitDrawingThread_(false)
 	, commentSizeMin_(1)
 	, commentSizeMax_(INT_MAX)
@@ -141,8 +141,8 @@ CCommentWindow::CCommentWindow()
 	, bShowOsd_(false)
 	, bUseTexture_(false)
 	, bUseDrawingThread_(false)
-	, pTextureBitmap_(NULL)
-	, pgTexture_(NULL)
+	, pTextureBitmap_(nullptr)
+	, pgTexture_(nullptr)
 	, currentTextureHeight_(0)
 	, bForceRefreshDirty_(false)
 	, debugFlags_(0)
@@ -166,14 +166,14 @@ bool CCommentWindow::Create(HWND hwndParent)
 		// 実際には親ウィンドウではない
 		hwndParent_ = hwndParent;
 		CreateWindowEx(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
-		               TEXT("ru.jk.comment"), NULL, WS_POPUP, 0, 0, 0, 0, hwndParent_, NULL, hinst_, this);
+		               TEXT("ru.jk.comment"), nullptr, WS_POPUP, 0, 0, 0, 0, hwndParent_, nullptr, hinst_, this);
 		if (hwnd_) {
 			if (!bUseOsd_ && bUseDrawingThread_) {
-				hDrawingEvent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
-				hDrawingIdleEvent_ = CreateEvent(NULL, TRUE, TRUE, NULL);
+				hDrawingEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+				hDrawingIdleEvent_ = CreateEvent(nullptr, TRUE, TRUE, nullptr);
 				if (hDrawingEvent_ && hDrawingIdleEvent_) {
 					bQuitDrawingThread_ = false;
-					hDrawingThread_ = reinterpret_cast<HANDLE>(::_beginthreadex(NULL, 0, DrawingThread, this, 0, NULL));
+					hDrawingThread_ = reinterpret_cast<HANDLE>(::_beginthreadex(nullptr, 0, DrawingThread, this, 0, nullptr));
 					if (hDrawingThread_) {
 						SetThreadPriority(hDrawingThread_, THREAD_PRIORITY_ABOVE_NORMAL);
 					}
@@ -199,26 +199,26 @@ void CCommentWindow::Destroy()
 			TerminateThread(hDrawingThread_, 1);
 		}
 		CloseHandle(hDrawingThread_);
-		hDrawingThread_ = NULL;
+		hDrawingThread_ = nullptr;
 	}
 	if (hDrawingIdleEvent_) {
 		CloseHandle(hDrawingIdleEvent_);
-		hDrawingIdleEvent_ = NULL;
+		hDrawingIdleEvent_ = nullptr;
 	}
 	if (hDrawingEvent_) {
 		CloseHandle(hDrawingEvent_);
-		hDrawingEvent_ = NULL;
+		hDrawingEvent_ = nullptr;
 	}
 	if (hwnd_) {
 		DestroyWindow(hwnd_);
 	}
 	if (hbmWork_) {
 		DeleteObject(hbmWork_);
-		hbmWork_ = NULL;
+		hbmWork_ = nullptr;
 	}
 	if (hdcWork_) {
 		DeleteDC(hdcWork_);
-		hdcWork_ = NULL;
+		hdcWork_ = nullptr;
 	}
 	if (bShowOsd_) {
 		osdCompositor_.DeleteTexture(0, 0);
@@ -230,8 +230,8 @@ void CCommentWindow::Destroy()
 
 	delete pgTexture_;
 	delete pTextureBitmap_;
-	pgTexture_ = NULL;
-	pTextureBitmap_ = NULL;
+	pgTexture_ = nullptr;
+	pTextureBitmap_ = nullptr;
 }
 
 // コメントの描画スタイルを設定する
@@ -295,11 +295,11 @@ bool CCommentWindow::AllocateWorkBitmap(int width, int height, bool *pbRealloc)
 			return true;
 		}
 		DeleteObject(hbmWork_);
-		hbmWork_ = NULL;
+		hbmWork_ = nullptr;
 	}
 	if (hdcWork_) {
 		DeleteDC(hdcWork_);
-		hdcWork_ = NULL;
+		hdcWork_ = nullptr;
 	}
 	//デバイスコンテキストも同時に確保
 	if (!hwnd_) {
@@ -318,16 +318,16 @@ bool CCommentWindow::AllocateWorkBitmap(int width, int height, bool *pbRealloc)
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
-	hbmWork_ = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, &pBits_, NULL, 0);
+	hbmWork_ = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &pBits_, nullptr, 0);
 	*pbRealloc = true;
-	return hbmWork_ != NULL;
+	return hbmWork_ != nullptr;
 }
 
 void CCommentWindow::OnParentMove()
 {
 	if (hwnd_) {
 		GetWindowRect(hwndParent_, &rcParent_);
-		SetWindowPos(hwnd_, NULL, rcParent_.left, rcParent_.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+		SetWindowPos(hwnd_, nullptr, rcParent_.left, rcParent_.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 }
 
@@ -349,7 +349,7 @@ void CCommentWindow::OnParentSize()
 				bmi.bmiHeader.biBitCount = 32;
 				bmi.bmiHeader.biCompression = BI_RGB;
 				void *pBits;
-				HBITMAP hbm = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, &pBits, NULL, 0);
+				HBITMAP hbm = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &pBits, nullptr, 0);
 				if (hbm) {
 					*static_cast<DWORD*>(pBits) = 0/*0xFF00FF00*/;
 					osdCompositor_.AddTexture(hbm, 0, 0, true, 0);
@@ -360,7 +360,7 @@ void CCommentWindow::OnParentSize()
 			}
 		} else if (!bUseOsd_) {
 			RECT rc = rcParent_;
-			SetWindowPos(hwnd_, NULL, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
+			SetWindowPos(hwnd_, nullptr, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
 		}
 	}
 }
@@ -511,7 +511,7 @@ void CCommentWindow::UpdateLayeredWindow()
 	BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
 	// ダーティ領域を指示すると閑散とした実況で実測25%強軽い
 	HDC hdc = GetDC(hwnd_);
-	UpdateLayeredWindow(hwnd_, hdc, NULL, &sz, hdcWork_, &ptSrc, RGB(12, 12, 12), &blend, bAntiAlias_ ? ULW_ALPHA : ULW_COLORKEY, &rcDirty_);
+	UpdateLayeredWindow(hwnd_, hdc, nullptr, &sz, hdcWork_, &ptSrc, RGB(12, 12, 12), &blend, bAntiAlias_ ? ULW_ALPHA : ULW_COLORKEY, &rcDirty_);
 	ReleaseDC(hwnd_, hdc);
 	SelectObject(hdcWork_, hbmOld);
 
@@ -896,7 +896,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					if (fontOutline_) {
 						grPath.Reset();
 						grPath.AddString(t.text.c_str(), -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
-						                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), NULL);
+						                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), nullptr);
 						pgTexture_->SetCompositingMode(bOpaque ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						pgTexture_->SetSmoothingMode(bAntiAlias_ ? Gdiplus::SmoothingModeHighQuality : Gdiplus::SmoothingModeNone);
 						Gdiplus::Pen penShadow(shadowColor, shadowOffset / 2);
@@ -941,7 +941,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 				if (fontOutline_) {
 					grPath.Reset();
 					grPath.AddString(it->text.c_str(), -1, &fontFamily, pFont->GetStyle(), pFont->GetSize() / 0.76f,
-					                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), NULL);
+					                 pt + Gdiplus::PointF(shadowOffset / 2 + 1, shadowOffset / 2 + 1), nullptr);
 					g.SetCompositingMode(bAntiAlias_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 					g.SetSmoothingMode(bAntiAlias_ ? Gdiplus::SmoothingModeHighQuality : Gdiplus::SmoothingModeNone);
 					Gdiplus::Pen penShadow(shadowColor, shadowOffset / 2);
@@ -1028,12 +1028,12 @@ LRESULT CALLBACK CCommentWindow::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 		pThis = static_cast<CCommentWindow*>((reinterpret_cast<LPCREATESTRUCT>(lParam))->lpCreateParams);
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
 		pThis->hwnd_ = hwnd;
-		SetTimer(hwnd, 1, 1000, NULL);
+		SetTimer(hwnd, 1, 1000, nullptr);
 		return 0;
 	case WM_DESTROY:
 		// トップレベルじゃないのでDestroy()以外から他発的に破棄されることもある
 		pThis = reinterpret_cast<CCommentWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-		pThis->hwnd_ = NULL;
+		pThis->hwnd_ = nullptr;
 		return 0;
 	case WM_TIMER:
 		if (wParam == 1) {

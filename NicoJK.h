@@ -110,13 +110,13 @@ private:
 	bool GetChannelNetworkServiceID(int tuningSpace, int channelIndex, DWORD *pNtsID);
 	bool GetCurrentTot(FILETIME *pft);
 	bool IsMatchDriverName(LPCTSTR drivers);
-	void WriteToLogfile(int jkID, const char *text = NULL);
-	bool ReadFromLogfile(int jkID, char *text = NULL, int len = 0, unsigned int tmToRead = 0);
+	void WriteToLogfile(int jkID, const char *text = nullptr);
+	bool ReadFromLogfile(int jkID, char *text = nullptr, int len = 0, unsigned int tmToRead = 0);
 	static LRESULT CALLBACK EventCallback(UINT Event, LPARAM lParam1, LPARAM lParam2, void *pClientData);
 	static BOOL CALLBACK WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT *pResult, void *pUserData);
 	bool ProcessChatTag(const char *tag, bool bShow = true, int showDelay = 0);
 	void OutputMessageLog(LPCTSTR text);
-	void GetPostComboBoxText(LPTSTR comm, int commSize, LPTSTR mail = NULL, int mailSize = 0);
+	void GetPostComboBoxText(LPTSTR comm, int commSize, LPTSTR mail = nullptr, int mailSize = 0);
 	void ProcessLocalPost(LPCTSTR comm);
 	static LRESULT CALLBACK PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

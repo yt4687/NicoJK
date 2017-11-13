@@ -44,10 +44,6 @@
 #pragma comment(lib, "imm32.lib")
 #pragma comment(lib, "crypt32.lib")
 
-// この置換はさほど良い習慣ではない
-#undef NULL
-#define NULL nullptr
-
 // NOMINMAXではGdiPlus.hが通らない
 #undef min
 #undef max
