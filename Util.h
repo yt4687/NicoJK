@@ -18,7 +18,7 @@ void UnixTimeToFileTime(unsigned int tm, FILETIME *pft);
 unsigned int FileTimeToUnixTime(const FILETIME &ft);
 FILETIME &operator+=(FILETIME &ft, LONGLONG offset);
 LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2);
-bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst);
+bool AribToFileTime(const BYTE *pData, FILETIME *pft);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout = INT_MAX);

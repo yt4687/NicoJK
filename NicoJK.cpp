@@ -2764,9 +2764,8 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 			// TOT or TDT (ARIB STD-B10)
 			if (pTable + 7 < pData + 188 && (pTable[0] == 0x73 || pTable[0] == 0x70)) {
 				// TOT時刻とTickカウントを記録する
-				SYSTEMTIME st;
 				FILETIME ft;
-				if (AribToSystemTime(&pTable[3], &st) && SystemTimeToFileTime(&st, &ft)) {
+				if (AribToFileTime(&pTable[3], &ft)) {
 					// UTCに変換
 					ft += -32400000LL * FILETIME_MILLISECOND;
 					dprintf(TEXT("CNicoJK::StreamCallback() TOT\n")); // DEBUG

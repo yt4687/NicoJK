@@ -233,30 +233,21 @@ LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2)
 	return ll1 - ll2;
 }
 
-// 参考: ARIB STD-B10,TR-B13
-static void SplitAribMjd(WORD wAribMjd, WORD *pwYear, WORD *pwMonth, WORD *pwDay, WORD *pwDayOfWeek)
-{
-	// MJD形式の日付を解析する
-	DWORD dwYd = ((DWORD)wAribMjd * 20 - 301564) / 7305;
-	DWORD dwMd = ((DWORD)wAribMjd * 10000 - 149561000 - dwYd * 1461 / 4 * 10000) / 306001;
-	DWORD dwK = dwMd==14 || dwMd==15 ? 1 : 0;
-	*pwDay = wAribMjd - 14956 - (WORD)(dwYd * 1461 / 4) - (WORD)(dwMd * 306001 / 10000);
-	*pwYear = (WORD)(dwYd + dwK) + 1900;
-	*pwMonth = (WORD)(dwMd - 1 - dwK * 12);
-	*pwDayOfWeek = (wAribMjd + 3) % 7;
-}
-
-bool AribToSystemTime(const BYTE *pData, SYSTEMTIME *pst)
+bool AribToFileTime(const BYTE *pData, FILETIME *pft)
 {
 	if (pData[0]==0xFF && pData[1]==0xFF && pData[2]==0xFF && pData[3]==0xFF && pData[4]==0xFF) {
 		// 不指定
 		return false;
 	}
-	SplitAribMjd((pData[0]<<8)|pData[1], &pst->wYear, &pst->wMonth, &pst->wDay, &pst->wDayOfWeek);
-	pst->wHour = (pData[2]>>4) * 10 + (pData[2]&0x0F);
-	pst->wMinute = (pData[3]>>4) * 10 + (pData[3]&0x0F);
-	pst->wSecond = (pData[4]>>4) * 10 + (pData[4]&0x0F);
-	pst->wMilliseconds = 0;
+	// 1858-11-17
+	pft->dwLowDateTime = 2303934464;
+	pft->dwHighDateTime = 18947191;
+	// MJD形式の日付
+	*pft += (pData[0] << 8 | pData[1]) * FILETIME_MILLISECOND * 86400000;
+	// BCD形式の時刻
+	*pft += ((pData[2] >> 4) * 10 + (pData[2] & 0x0F)) * FILETIME_MILLISECOND * 3600000;
+	*pft += ((pData[3] >> 4) * 10 + (pData[3] & 0x0F)) * FILETIME_MILLISECOND * 60000;
+	*pft += ((pData[4] >> 4) * 10 + (pData[4] & 0x0F)) * FILETIME_MILLISECOND * 1000;
 	return true;
 }
 
