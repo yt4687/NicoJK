@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "OsdCompositor.h"
 
@@ -10,11 +10,11 @@ public:
 	static const int DEFAULT_LINE_COUNT = 14;
 	static const int DEFAULT_LINE_DRAW_COUNT = 9999;
 	static const int DISPLAY_DURATION = 4000;
-	// •\¦‚·‚×‚«ƒRƒƒ“ƒg‚ª‚È‚¢‚Æ‚«ƒEƒBƒ“ƒhƒE‚ğ”ñ•\¦‚É‚·‚é‚Ü‚Å‚Ì—P—\[•b]
-	// (ƒŒƒCƒ„[ƒhƒEƒBƒ“ƒhƒE‚Í”í‚¹‚Ä‚¢‚é‚¾‚¯‚Å‚à‚»‚ê‚È‚è‚ÌƒRƒXƒg‚ª‚©‚©‚é‚½‚ß)
+	// è¡¨ç¤ºã™ã¹ãã‚³ãƒ¡ãƒ³ãƒˆãŒãªã„ã¨ãã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã‚’éè¡¨ç¤ºã«ã™ã‚‹ã¾ã§ã®çŒ¶äºˆ[ç§’]
+	// (ãƒ¬ã‚¤ãƒ¤ãƒ¼ãƒ‰ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã¯è¢«ã›ã¦ã„ã‚‹ã ã‘ã§ã‚‚ãã‚Œãªã‚Šã®ã‚³ã‚¹ãƒˆãŒã‹ã‹ã‚‹ãŸã‚)
 	static const int AUTOHIDE_DELAY = 10;
 	static const int FONT_SMALL_RATIO = 75;
-	// ƒeƒNƒXƒ`ƒƒ—pƒrƒbƒgƒ}ƒbƒv‚Ì•‚ÌÅ¬’l(ƒƒ‚ƒŠ‚â‹ÇŠQÆ«‚Ì–Ê‚Å\•ª¬‚³‚È’l)
+	// ãƒ†ã‚¯ã‚¹ãƒãƒ£ç”¨ãƒ“ãƒƒãƒˆãƒãƒƒãƒ—ã®å¹…ã®æœ€å°å€¤(ãƒ¡ãƒ¢ãƒªã‚„å±€æ‰€å‚ç…§æ€§ã®é¢ã§ååˆ†å°ã•ãªå€¤)
 	static const int TEXTURE_BITMAP_WIDTH_MIN = 640;
 	enum CHAT_POSITION {
 		CHAT_POS_DEFAULT,
@@ -123,7 +123,7 @@ private:
 	int currentWindowWidth_;
 	std::list<CHAT> chatList_;
 	std::list<CHAT> chatPoolList_;
-	// chatList_(ƒŠƒXƒg\‘¢‚Ì‚İ),chatPoolList_‚ğ•ÛŒì
+	// chatList_(ãƒªã‚¹ãƒˆæ§‹é€ ã®ã¿),chatPoolList_ã‚’ä¿è­·
 	CCriticalLock chatLock_;
 	int autoHideCount_;
 	int parentSizedCount_;
