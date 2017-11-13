@@ -79,11 +79,11 @@ bool CNicoJK::RPL_ELEM::SetPattern(LPCTSTR patt)
 	// 先頭文字が大文字の場合はそのパターンが無効状態であることを示す
 	static const std::regex reBrace("[Ss](.)(.+?)\\1(.*?)\\1g");
 	std::vector<char> utf8(WideCharToMultiByte(CP_UTF8, 0, patt, -1, nullptr, 0, nullptr, nullptr));
-	if (utf8.empty() || WideCharToMultiByte(CP_UTF8, 0, patt, -1, &utf8.front(), static_cast<int>(utf8.size()), nullptr, nullptr) == 0) {
+	if (utf8.empty() || WideCharToMultiByte(CP_UTF8, 0, patt, -1, utf8.data(), static_cast<int>(utf8.size()), nullptr, nullptr) == 0) {
 		return false;
 	}
 	std::cmatch m;
-	if (!std::regex_match(&utf8.front(), m, reBrace)) {
+	if (!std::regex_match(utf8.data(), m, reBrace)) {
 		return false;
 	}
 	try {
@@ -466,54 +466,53 @@ void CNicoJK::LoadFromIni()
 {
 	// iniはセクション単位で読むと非常に速い。起動時は処理が混み合うのでとくに有利
 	std::vector<TCHAR> buf = GetPrivateProfileSectionBuffer(TEXT("Setting"), szIniFileName_);
-	LPCTSTR pBuf = &buf.front();
-	s_.hideForceWindow		= GetBufferedProfileInt(pBuf, TEXT("hideForceWindow"), 0);
-	s_.forceFontSize		= GetBufferedProfileInt(pBuf, TEXT("forceFontSize"), 10);
-	GetBufferedProfileString(pBuf, TEXT("forceFontName"), TEXT("Meiryo UI"), s_.forceFontName, _countof(s_.forceFontName));
-	s_.timerInterval		= GetBufferedProfileInt(pBuf, TEXT("timerInterval"), -5000);
-	s_.halfSkipThreshold	= GetBufferedProfileInt(pBuf, TEXT("halfSkipThreshold"), 9999);
-	s_.commentLineMargin	= GetBufferedProfileInt(pBuf, TEXT("commentLineMargin"), 125);
-	s_.commentFontOutline	= GetBufferedProfileInt(pBuf, TEXT("commentFontOutline"), 0);
-	s_.commentSize			= GetBufferedProfileInt(pBuf, TEXT("commentSize"), 100);
-	s_.commentSizeMin		= GetBufferedProfileInt(pBuf, TEXT("commentSizeMin"), 16);
-	s_.commentSizeMax		= GetBufferedProfileInt(pBuf, TEXT("commentSizeMax"), 9999);
-	GetBufferedProfileString(pBuf, TEXT("commentFontName"), TEXT("ＭＳ Ｐゴシック"), s_.commentFontName, _countof(s_.commentFontName));
-	GetBufferedProfileString(pBuf, TEXT("commentFontNameMulti"), TEXT("ＭＳ Ｐゴシック"), s_.commentFontNameMulti, _countof(s_.commentFontNameMulti));
-	s_.bCommentFontBold		= GetBufferedProfileInt(pBuf, TEXT("commentFontBold"), 1) != 0;
-	s_.bCommentFontAntiAlias = GetBufferedProfileInt(pBuf, TEXT("commentFontAntiAlias"), 1) != 0;
-	s_.commentDuration		= GetBufferedProfileInt(pBuf, TEXT("commentDuration"), CCommentWindow::DISPLAY_DURATION);
-	s_.commentDrawLineCount = GetBufferedProfileInt(pBuf, TEXT("commentDrawLineCount"), CCommentWindow::DEFAULT_LINE_DRAW_COUNT);
-	s_.logfileMode			= GetBufferedProfileInt(pBuf, TEXT("logfileMode"), 0);
+	s_.hideForceWindow		= GetBufferedProfileInt(buf.data(), TEXT("hideForceWindow"), 0);
+	s_.forceFontSize		= GetBufferedProfileInt(buf.data(), TEXT("forceFontSize"), 10);
+	GetBufferedProfileString(buf.data(), TEXT("forceFontName"), TEXT("Meiryo UI"), s_.forceFontName, _countof(s_.forceFontName));
+	s_.timerInterval		= GetBufferedProfileInt(buf.data(), TEXT("timerInterval"), -5000);
+	s_.halfSkipThreshold	= GetBufferedProfileInt(buf.data(), TEXT("halfSkipThreshold"), 9999);
+	s_.commentLineMargin	= GetBufferedProfileInt(buf.data(), TEXT("commentLineMargin"), 125);
+	s_.commentFontOutline	= GetBufferedProfileInt(buf.data(), TEXT("commentFontOutline"), 0);
+	s_.commentSize			= GetBufferedProfileInt(buf.data(), TEXT("commentSize"), 100);
+	s_.commentSizeMin		= GetBufferedProfileInt(buf.data(), TEXT("commentSizeMin"), 16);
+	s_.commentSizeMax		= GetBufferedProfileInt(buf.data(), TEXT("commentSizeMax"), 9999);
+	GetBufferedProfileString(buf.data(), TEXT("commentFontName"), TEXT("ＭＳ Ｐゴシック"), s_.commentFontName, _countof(s_.commentFontName));
+	GetBufferedProfileString(buf.data(), TEXT("commentFontNameMulti"), TEXT("ＭＳ Ｐゴシック"), s_.commentFontNameMulti, _countof(s_.commentFontNameMulti));
+	s_.bCommentFontBold		= GetBufferedProfileInt(buf.data(), TEXT("commentFontBold"), 1) != 0;
+	s_.bCommentFontAntiAlias = GetBufferedProfileInt(buf.data(), TEXT("commentFontAntiAlias"), 1) != 0;
+	s_.commentDuration		= GetBufferedProfileInt(buf.data(), TEXT("commentDuration"), CCommentWindow::DISPLAY_DURATION);
+	s_.commentDrawLineCount = GetBufferedProfileInt(buf.data(), TEXT("commentDrawLineCount"), CCommentWindow::DEFAULT_LINE_DRAW_COUNT);
+	s_.logfileMode			= GetBufferedProfileInt(buf.data(), TEXT("logfileMode"), 0);
 	TCHAR val[SETTING_VALUE_MAX];
-	GetBufferedProfileString(pBuf, TEXT("logfileDrivers"),
+	GetBufferedProfileString(buf.data(), TEXT("logfileDrivers"),
 	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_Pipe.dll"),
 	                         val, _countof(val));
 	s_.logfileDrivers = val;
-	GetBufferedProfileString(pBuf, TEXT("nonTunerDrivers"),
+	GetBufferedProfileString(buf.data(), TEXT("nonTunerDrivers"),
 	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_Pipe.dll"),
 	                         val, _countof(val));
 	s_.nonTunerDrivers = val;
-	GetBufferedProfileString(pBuf, TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
+	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
 	s_.execGetCookie = val;
-	GetBufferedProfileString(pBuf, TEXT("mailDecorations"),
+	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
 	                         TEXT("[cyan big]:[shita]:[green shita small]:[orange]::"),
 	                         val, _countof(val));
 	s_.mailDecorations = val;
-	s_.bAnonymity			= GetBufferedProfileInt(pBuf, TEXT("anonymity"), 1) != 0;
-	s_.bUseOsdCompositor	= GetBufferedProfileInt(pBuf, TEXT("useOsdCompositor"), 0) != 0;
-	s_.bUseTexture			= GetBufferedProfileInt(pBuf, TEXT("useTexture"), 1) != 0;
-	s_.bUseDrawingThread	= GetBufferedProfileInt(pBuf, TEXT("useDrawingThread"), 1) != 0;
-	s_.bSetChannel			= GetBufferedProfileInt(pBuf, TEXT("setChannel"), 1) != 0;
-	s_.bShowRadio			= GetBufferedProfileInt(pBuf, TEXT("showRadio"), 0) != 0;
-	s_.bDoHalfClose			= GetBufferedProfileInt(pBuf, TEXT("doHalfClose"), 0) != 0;
-	s_.maxAutoReplace		= GetBufferedProfileInt(pBuf, TEXT("maxAutoReplace"), 20);
-	GetBufferedProfileString(pBuf, TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
+	s_.bAnonymity			= GetBufferedProfileInt(buf.data(), TEXT("anonymity"), 1) != 0;
+	s_.bUseOsdCompositor	= GetBufferedProfileInt(buf.data(), TEXT("useOsdCompositor"), 0) != 0;
+	s_.bUseTexture			= GetBufferedProfileInt(buf.data(), TEXT("useTexture"), 1) != 0;
+	s_.bUseDrawingThread	= GetBufferedProfileInt(buf.data(), TEXT("useDrawingThread"), 1) != 0;
+	s_.bSetChannel			= GetBufferedProfileInt(buf.data(), TEXT("setChannel"), 1) != 0;
+	s_.bShowRadio			= GetBufferedProfileInt(buf.data(), TEXT("showRadio"), 0) != 0;
+	s_.bDoHalfClose			= GetBufferedProfileInt(buf.data(), TEXT("doHalfClose"), 0) != 0;
+	s_.maxAutoReplace		= GetBufferedProfileInt(buf.data(), TEXT("maxAutoReplace"), 20);
+	GetBufferedProfileString(buf.data(), TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
 	s_.abone = val;
-	s_.dropLogfileMode		= GetBufferedProfileInt(pBuf, TEXT("dropLogfileMode"), 0);
-	s_.defaultPlaybackDelay	= GetBufferedProfileInt(pBuf, TEXT("defaultPlaybackDelay"), 500);
+	s_.dropLogfileMode		= GetBufferedProfileInt(buf.data(), TEXT("dropLogfileMode"), 0);
+	s_.defaultPlaybackDelay	= GetBufferedProfileInt(buf.data(), TEXT("defaultPlaybackDelay"), 500);
 	// 実況ログフォルダのパスを作成
 	TCHAR path[MAX_PATH], dir[MAX_PATH];
-	GetBufferedProfileString(pBuf, TEXT("logfileFolder"), TEXT("Plugins\\NicoJK"), path, _countof(path));
+	GetBufferedProfileString(buf.data(), TEXT("logfileFolder"), TEXT("Plugins\\NicoJK"), path, _countof(path));
 	if (path[0] && PathIsRelative(path)) {
 		if (!GetLongModuleFileName(nullptr, dir, _countof(dir)) || !PathRemoveFileSpec(dir) || !PathCombine(s_.logfileFolder, dir, path)) {
 			s_.logfileFolder[0] = TEXT('\0');
@@ -526,14 +525,14 @@ void CNicoJK::LoadFromIni()
 	}
 
 	buf = GetPrivateProfileSectionBuffer(TEXT("Window"), szIniFileName_);
-	s_.rcForce.left			= GetBufferedProfileInt(&buf.front(), TEXT("ForceX"), 0);
-	s_.rcForce.top			= GetBufferedProfileInt(&buf.front(), TEXT("ForceY"), 0);
-	s_.rcForce.right		= GetBufferedProfileInt(&buf.front(), TEXT("ForceWidth"), 0) + s_.rcForce.left;
-	s_.rcForce.bottom		= GetBufferedProfileInt(&buf.front(), TEXT("ForceHeight"), 0) + s_.rcForce.top;
-	s_.forceOpacity			= GetBufferedProfileInt(&buf.front(), TEXT("ForceOpacity"), 255);
-	s_.commentOpacity		= GetBufferedProfileInt(&buf.front(), TEXT("CommentOpacity"), 255);
-	s_.headerMask			= GetBufferedProfileInt(&buf.front(), TEXT("HeaderMask"), 0);
-	s_.bSetRelative			= GetBufferedProfileInt(&buf.front(), TEXT("SetRelative"), 0) != 0;
+	s_.rcForce.left			= GetBufferedProfileInt(buf.data(), TEXT("ForceX"), 0);
+	s_.rcForce.top			= GetBufferedProfileInt(buf.data(), TEXT("ForceY"), 0);
+	s_.rcForce.right		= GetBufferedProfileInt(buf.data(), TEXT("ForceWidth"), 0) + s_.rcForce.left;
+	s_.rcForce.bottom		= GetBufferedProfileInt(buf.data(), TEXT("ForceHeight"), 0) + s_.rcForce.top;
+	s_.forceOpacity			= GetBufferedProfileInt(buf.data(), TEXT("ForceOpacity"), 255);
+	s_.commentOpacity		= GetBufferedProfileInt(buf.data(), TEXT("CommentOpacity"), 255);
+	s_.headerMask			= GetBufferedProfileInt(buf.data(), TEXT("HeaderMask"), 0);
+	s_.bSetRelative			= GetBufferedProfileInt(buf.data(), TEXT("SetRelative"), 0) != 0;
 
 	ntsIDList_.clear();
 	ntsIDList_.reserve(_countof(DEFAULT_NTSID_TABLE));
@@ -543,7 +542,7 @@ void CNicoJK::LoadFromIni()
 	}
 	// 設定ファイルのネットワーク/サービスID-実況ID対照表を、ソートを維持しながらマージ
 	buf = GetPrivateProfileSectionBuffer(TEXT("Channels"), szIniFileName_);
-	for (LPCTSTR p = &buf.front(); *p; p += lstrlen(p) + 1) {
+	for (LPCTSTR p = buf.data(); *p; p += lstrlen(p) + 1) {
 		NETWORK_SERVICE_ID_ELEM e;
 		bool bPrior = _stscanf_s(p, TEXT("0x%x=+%d"), &e.ntsID, &e.jkID) == 2;
 		if (bPrior) {
@@ -584,17 +583,17 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 {
 	std::vector<TCHAR> buf = GetPrivateProfileSectionBuffer(section, szIniFileName_);
 	size_t lastSize = pRplList->size();
-	for (LPCTSTR p = &buf.front(); *p; p += lstrlen(p) + 1) {
+	for (LPCTSTR p = buf.data(); *p; p += lstrlen(p) + 1) {
 		RPL_ELEM e;
 		if (!StrCmpNI(p, TEXT("Pattern"), 7) && StrToIntEx(&p[7], STIF_DEFAULT, &e.key)) {
 			e.section = section;
 			TCHAR key[32];
 			wsprintf(key, TEXT("Comment%d"), e.key);
 			TCHAR val[SETTING_VALUE_MAX];
-			GetBufferedProfileString(&buf.front(), key, TEXT(""), val, _countof(val));
+			GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
 			e.comment = val;
 			wsprintf(key, TEXT("Pattern%d"), e.key);
-			GetBufferedProfileString(&buf.front(), key, TEXT(""), val, _countof(val));
+			GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
 			if (!e.SetPattern(val)) {
 				TCHAR text[64];
 				wsprintf(text, TEXT("%sの正規表現が異常です。"), key);

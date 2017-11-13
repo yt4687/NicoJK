@@ -114,7 +114,7 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 			case FD_WRITE:
 				if (!bShutdown_) {
 					while (!sendBuf_.empty()) {
-						int wrote = send(soc_, &sendBuf_.front(), (int)sendBuf_.size(), 0);
+						int wrote = send(soc_, sendBuf_.data(), (int)sendBuf_.size(), 0);
 						if (wrote == SOCKET_ERROR) {
 							// WSAEWOULDBLOCK時はつぎのFD_WRITEに先送り
 							if (WSAGetLastError() != WSAEWOULDBLOCK) {

@@ -38,7 +38,7 @@ std::vector<TCHAR> GetPrivateProfileSectionBuffer(LPCTSTR lpAppName, LPCTSTR lpF
 {
 	std::vector<TCHAR> buf(4096);
 	for (;;) {
-		DWORD len = GetPrivateProfileSection(lpAppName, &buf.front(), static_cast<DWORD>(buf.size()), lpFileName);
+		DWORD len = GetPrivateProfileSection(lpAppName, buf.data(), static_cast<DWORD>(buf.size()), lpFileName);
 		if (len < buf.size() - 2) {
 			buf.resize(len + 1);
 			break;
@@ -431,7 +431,7 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 			si.hStdOutput = hWritePipe;
 			PROCESS_INFORMATION pi;
 			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + lstrlen(commandLine) + 1);
-			if (CreateProcess(nullptr, &commandLineBuf.front(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
+			if (CreateProcess(nullptr, commandLineBuf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
 				int bufCount = 0;
 				bool bBreak = false;
 				bRet = true;
