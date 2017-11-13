@@ -80,15 +80,13 @@ bool CCommentWindow::Initialize(HINSTANCE hinst, bool *pbEnableOsdCompositor, bo
 			osdCompositor_.SetUpdateCallback(UpdateCallback, this);
 		}
 
-		OSVERSIONINFO vi;
+		OSVERSIONINFOEX vi;
 		vi.dwOSVersionInfoSize = sizeof(vi);
-		bWindows8_ = false;
-		if (GetVersionEx(&vi)) {
-			bWindows8_ = vi.dwMajorVersion==6 && vi.dwMinorVersion==2;
-			if (vi.dwMajorVersion >= 6) {
-				// このAPIはVista以降に存在するがVistaの実装はバグを含むらしい(KB955688)ので注意
-				(void*&)pfnUpdateLayeredWindowIndirect_ = GetProcAddress(GetModuleHandle(TEXT("user32.dll")), "UpdateLayeredWindowIndirect");
-			}
+		vi.dwMajorVersion = 6;
+		if (VerifyVersionInfo(&vi, VER_MAJORVERSION, VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL))) {
+			// このAPIはVista以降に存在するがVistaの実装はバグを含むらしい(KB955688)ので注意
+			pfnUpdateLayeredWindowIndirect_ = reinterpret_cast<BOOL (WINAPI*)(HWND, const UPDATELAYEREDWINDOWINFO*)>(
+				GetProcAddress(GetModuleHandle(TEXT("user32.dll")), "UpdateLayeredWindowIndirect"));
 		}
 		bSse2Available_ = IsProcessorFeaturePresent(PF_XMMI64_INSTRUCTIONS_AVAILABLE) != FALSE;
 	}
@@ -110,7 +108,6 @@ CCommentWindow::CCommentWindow()
 	: hinst_(nullptr)
 	, gdiplusToken_(0)
 	, pfnUpdateLayeredWindowIndirect_(nullptr)
-	, bWindows8_(false)
 	, bSse2Available_(false)
 	, hwnd_(nullptr)
 	, hwndParent_(nullptr)
@@ -141,8 +138,6 @@ CCommentWindow::CCommentWindow()
 	, bShowOsd_(false)
 	, bUseTexture_(false)
 	, bUseDrawingThread_(false)
-	, pTextureBitmap_(nullptr)
-	, pgTexture_(nullptr)
 	, currentTextureHeight_(0)
 	, bForceRefreshDirty_(false)
 	, debugFlags_(0)
@@ -228,10 +223,8 @@ void CCommentWindow::Destroy()
 	autoHideCount_ = 0;
 	parentSizedCount_ = 0;
 
-	delete pgTexture_;
-	delete pTextureBitmap_;
-	pgTexture_ = nullptr;
-	pTextureBitmap_ = nullptr;
+	pgTexture_.reset();
+	pTextureBitmap_.reset();
 }
 
 // コメントの描画スタイルを設定する
@@ -370,7 +363,8 @@ void CCommentWindow::AddChat(LPCTSTR text, COLORREF color, CHAT_POSITION positio
                              CHAT_SIZE size, CHAT_ALIGN align, bool bInsertLast, BYTE backOpacity, int delay)
 {
 	if (hwnd_) {
-		CHAT c;
+		std::list<CHAT> lc(1);
+		CHAT &c = lc.front();
 		c.pts = rts_ + delay;
 		c.count = ++chatCount_;
 		c.line = INT_MAX;
@@ -384,7 +378,7 @@ void CCommentWindow::AddChat(LPCTSTR text, COLORREF color, CHAT_POSITION positio
 		c.bDrew = false;
 		// 一時リストに追加(描画時にchatList_にマージ)
 		CBlockLock lock(&chatLock_);
-		chatPoolList_.push_back(std::move(c));
+		chatPoolList_.splice(chatPoolList_.end(), lc);
 	}
 }
 
@@ -659,11 +653,11 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 		if (bUseTexture_) {
 			// テクスチャ用ビットマップを確保
 			if (!pTextureBitmap_ || (int)pTextureBitmap_->GetWidth() != textureWidth || (int)pTextureBitmap_->GetHeight() != height) {
-				delete pgTexture_;
-				delete pTextureBitmap_;
+				pgTexture_.reset();
+				pTextureBitmap_.reset();
 				// Premultの方がかなり軽負荷 (参考: http://www.codeproject.com/Tips/66909/Rendering-fast-with-GDI-What-to-do-and-what-not-to )
-				pTextureBitmap_ = new Gdiplus::Bitmap(textureWidth, height, PixelFormat32bppPARGB);
-				pgTexture_ = new Gdiplus::Graphics(pTextureBitmap_);
+				pTextureBitmap_.reset(new Gdiplus::Bitmap(textureWidth, height, PixelFormat32bppPARGB));
+				pgTexture_.reset(new Gdiplus::Graphics(pTextureBitmap_.get()));
 				pgTexture_->SetTextRenderingHint(bAntiAlias_ ? Gdiplus::TextRenderingHintAntiAlias : Gdiplus::TextRenderingHintSingleBitPerPixel);
 				textureList_.clear();
 			}
@@ -686,12 +680,12 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 
 		// 新しいコメントがあれば重ならないようにリストを再配置する
 		while (!chatPoolList_.empty()) {
-			CHAT c = std::move(chatPoolList_.front());
-			chatPoolList_.pop_front();
+			CHAT &c = chatPoolList_.front();
 			// 実際の描画サイズを計測
 			const Gdiplus::Font *pFont = c.bMultiLine ? &(c.bSmall ? fontMultiSmall : fontMulti) : &(c.bSmall ? fontSmall : font);
 			Gdiplus::RectF rcDraw;
 			if (g.MeasureString(c.text.c_str(), -1, pFont, Gdiplus::PointF(0, 0), &rcDraw) != Gdiplus::Ok) {
+				chatPoolList_.pop_front();
 				continue;
 			}
 			c.currentDrawWidth = (int)rcDraw.Width;
@@ -772,7 +766,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					}
 				}
 			}
-			chatList_.insert(it, std::move(c));
+			chatList_.splice(it, chatPoolList_, chatPoolList_.begin());
 		}
 
 		// End CBlockLock
@@ -905,13 +899,11 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 						pgTexture_->SetCompositingMode(bAntiAlias_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						pgTexture_->FillPath(&br, &grPath);
 					} else {
-						// TODO: Win8にバグfixがきたらこのへんを修正するべき
-						// SourceCopyの方が軽い雰囲気がするけどWin8だと文字崩壊するので特別扱い
-						pgTexture_->SetCompositingMode(bOpaque || !bAntiAlias_ && bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
+						pgTexture_->SetCompositingMode(bOpaque ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						Gdiplus::SolidBrush brShadow(shadowColor);
 						// Win7においてU+2588の上端1ピクセルはみ出す現象がみられたため+1
 						pgTexture_->DrawString(t.text.c_str(), -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
-						pgTexture_->SetCompositingMode(bAntiAlias_ || bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
+						pgTexture_->SetCompositingMode(bAntiAlias_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 						pgTexture_->DrawString(t.text.c_str(), -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
 					}
 					jt = textureList_.insert(jtMin, std::move(t));
@@ -927,7 +919,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 			g.SetSmoothingMode(Gdiplus::SmoothingModeNone);
 			if (jt != textureList_.end()) {
 				// テクスチャを使う
-				g.DrawImage(pTextureBitmap_, px, py,
+				g.DrawImage(pTextureBitmap_.get(), px, py,
 				            jt->rc.left, jt->rc.top, jt->rc.right - jt->rc.left, jt->rc.bottom - jt->rc.top, Gdiplus::UnitPixel);
 				jt->bUsed = true;
 			} else {
@@ -949,7 +941,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 					g.DrawPath(&penShadow, &grPath);
 					g.FillPath(&br, &grPath);
 				} else {
-					g.SetCompositingMode(bAntiAlias_ || bWindows8_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
+					g.SetCompositingMode(bAntiAlias_ ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy);
 					Gdiplus::SolidBrush brShadow(shadowColor);
 					g.DrawString(it->text.c_str(), -1, pFont, pt + Gdiplus::PointF(shadowOffset, shadowOffset + 1), &brShadow);
 					g.DrawString(it->text.c_str(), -1, pFont, pt + Gdiplus::PointF(0, 1), &br);
@@ -997,7 +989,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 				pgTexture_->FillRectangle(&br, 0, 0, textureWidth, height);
 			}
 			g.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
-			g.DrawImage(pTextureBitmap_, 0, 0, textureWidth / 4, height / 4);
+			g.DrawImage(pTextureBitmap_.get(), 0, 0, textureWidth / 4, height / 4);
 			prcUnused->top = min(max(static_cast<LONG>(height / 4), prcUnused->top), prcUnused->bottom);
 			prcUnusedWoShita->top = min(max(static_cast<LONG>(height / 4), prcUnusedWoShita->top), prcUnusedWoShita->bottom);
 		}

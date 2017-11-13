@@ -2,8 +2,6 @@
 
 #include "OsdCompositor.h"
 
-#pragma warning(disable : 4995)
-
 class CCommentWindow
 {
 public:
@@ -94,7 +92,6 @@ private:
 	HINSTANCE hinst_;
 	ULONG_PTR gdiplusToken_;
 	BOOL (WINAPI *pfnUpdateLayeredWindowIndirect_)(HWND hWnd, const UPDATELAYEREDWINDOWINFO *pULWInfo);
-	bool bWindows8_;
 	bool bSse2Available_;
 	HWND hwnd_;
 	HWND hwndParent_;
@@ -133,8 +130,8 @@ private:
 	bool bShowOsd_;
 	bool bUseTexture_;
 	bool bUseDrawingThread_;
-	Gdiplus::Bitmap *pTextureBitmap_;
-	Gdiplus::Graphics *pgTexture_;
+	std::unique_ptr<Gdiplus::Bitmap> pTextureBitmap_;
+	std::unique_ptr<Gdiplus::Graphics> pgTexture_;
 	int currentTextureHeight_;
 	std::list<TEXTURE> textureList_;
 	RECT rcUnused_;

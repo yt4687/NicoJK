@@ -8,7 +8,6 @@ CAsyncSocket::CAsyncSocket()
 	, bShutdown_(false)
 	, hwnd_(nullptr)
 	, msg_(0)
-	, name_(nullptr)
 	, port_(0)
 	, bKeepSession_(false)
 	, bDoHalfClose_(false)
@@ -18,7 +17,6 @@ CAsyncSocket::CAsyncSocket()
 CAsyncSocket::~CAsyncSocket()
 {
 	Close();
-	delete [] name_;
 }
 
 // 非同期通信を開始する
@@ -39,9 +37,7 @@ bool CAsyncSocket::Send(HWND hwnd, UINT msg, const char *name, unsigned short po
 			sendBuf_.assign(&buf[0], &buf[len]);
 			hwnd_ = hwnd;
 			msg_ = msg;
-			delete [] name_;
-			name_ = new char[lstrlenA(name) + 1];
-			lstrcpyA(name_, name);
+			name_ = name;
 			port_ = port;
 			bKeepSession_ = bKeepSession;
 			// キューにたまっているかもしれないメッセージを流すため待機
@@ -70,8 +66,8 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 			bShutdown_ = false;
 			return -1;
 		}
-		if ((imAddr = inet_addr(name_)) == INADDR_NONE) {
-			hGethost_ = WSAAsyncGetHostByName(hwnd_, msg_, name_, hostBuf_, sizeof(hostBuf_));
+		if ((imAddr = inet_addr(name_.c_str())) == INADDR_NONE) {
+			hGethost_ = WSAAsyncGetHostByName(hwnd_, msg_, name_.c_str(), hostBuf_, sizeof(hostBuf_));
 			return hGethost_ ? 0 : -1;
 		}
 		// IPアドレス即値(名前解決を省略)

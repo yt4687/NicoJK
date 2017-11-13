@@ -27,6 +27,7 @@
 #include <vector>
 #include <list>
 #include <regex>
+#include <memory>
 #include <utility>
 #include <algorithm>
 #include <tchar.h>

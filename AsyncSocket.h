@@ -19,7 +19,7 @@ private:
 	bool bShutdown_;
 	HWND hwnd_;
 	UINT msg_;
-	char *name_;
+	std::string name_;
 	unsigned short port_;
 	bool bKeepSession_;
 	bool bDoHalfClose_;
