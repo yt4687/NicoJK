@@ -121,7 +121,7 @@ private:
 	std::list<CHAT> chatList_;
 	std::list<CHAT> chatPoolList_;
 	// chatList_(リスト構造のみ),chatPoolList_を保護
-	CCriticalLock chatLock_;
+	recursive_mutex_ chatLock_;
 	int autoHideCount_;
 	int parentSizedCount_;
 	RECT rcParent_;

@@ -196,7 +196,7 @@ private:
 	int pcrPid_;
 	int pcrPids_[8];
 	int pcrPidCounts_[8];
-	CCriticalLock streamLock_;
+	recursive_mutex_ streamLock_;
 
 	// 指定ファイル再生
 	bool bSpecFile_;

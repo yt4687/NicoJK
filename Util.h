@@ -38,23 +38,26 @@ void EnumFindFile(LPCTSTR pattern, P enumProc)
 	}
 }
 
-class CCriticalLock
+class recursive_mutex_
 {
 public:
-	CCriticalLock() { InitializeCriticalSection(&section_); }
-	~CCriticalLock() { DeleteCriticalSection(&section_); }
-	void Lock() { EnterCriticalSection(&section_); }
-	void Unlock() { LeaveCriticalSection(&section_); }
-	//CRITICAL_SECTION &GetCriticalSection() { return section_; }
+	recursive_mutex_() { InitializeCriticalSection(&cs_); }
+	~recursive_mutex_() { DeleteCriticalSection(&cs_); }
+	void lock() { EnterCriticalSection(&cs_); }
+	void unlock() { LeaveCriticalSection(&cs_); }
 private:
-	CRITICAL_SECTION section_;
+	recursive_mutex_(const recursive_mutex_&);
+	recursive_mutex_ &operator=(const recursive_mutex_&);
+	CRITICAL_SECTION cs_;
 };
 
 class CBlockLock
 {
 public:
-	CBlockLock(CCriticalLock *pLock) : pLock_(pLock) { pLock_->Lock(); }
-	~CBlockLock() { pLock_->Unlock(); }
+	CBlockLock(recursive_mutex_ *mtx) : mtx_(mtx) { mtx_->lock(); }
+	~CBlockLock() { mtx_->unlock(); }
 private:
-	CCriticalLock *pLock_;
+	CBlockLock(const CBlockLock&);
+	CBlockLock &operator=(const CBlockLock&);
+	recursive_mutex_ *mtx_;
 };

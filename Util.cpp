@@ -3,7 +3,7 @@
 
 static const struct {
 	COLORREF color;
-	char *command;
+	const char *command;
 } COMMAND2COLOR[] = {
 	{RGB(0xFF, 0x00, 0x00), "red"},
 	{RGB(0xFF, 0x80, 0x80), "pink"},
