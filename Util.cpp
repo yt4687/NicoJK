@@ -257,7 +257,9 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".txt")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
+	size_t len = _tcslen(srcPath);
+	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".txt")) &&
+	    !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
 		std::cmatch m;
@@ -313,7 +315,9 @@ static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".jkl")) && !_tfopen_s(&fp, srcPath, TEXT("rbN"))) {
+	size_t len = _tcslen(srcPath);
+	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".jkl")) &&
+	    !_tfopen_s(&fp, srcPath, TEXT("rbN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		char buf[4096];
 		if (fread(buf, sizeof(char), 10, fpSrc.get()) == 10 && !memcmp(buf, "<JikkyoRec", 10) && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
@@ -349,7 +353,9 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".xml")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
+	size_t len = _tcslen(srcPath);
+	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".xml")) &&
+	    !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		char buf[4096];
 		if (fgets(buf, _countof(buf), fpSrc.get()) && strstr(buf, "<?xml") && !_tfopen_s(&fp, destPath, TEXT("wN"))) {

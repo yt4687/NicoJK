@@ -187,15 +187,18 @@ bool CNicoJK::Initialize()
 	// 初期化処理
 	TCHAR path[MAX_PATH];
 	iniFileName_.clear();
-	if (GetLongModuleFileName(g_hinstDLL, path, _countof(path)) && PathRenameExtension(path, TEXT(".ini"))) {
-		iniFileName_ = path;
-	}
 	tmpSpecFileName_.clear();
 	if (GetLongModuleFileName(g_hinstDLL, path, _countof(path))) {
-		PathRemoveExtension(path);
+		iniFileName_ = path;
+		size_t lastSep = iniFileName_.find_last_of(TEXT("/\\."));
+		if (lastSep != tstring::npos && iniFileName_[lastSep] == TEXT('.')) {
+			iniFileName_.erase(lastSep);
+		}
+		tmpSpecFileName_ = iniFileName_;
+		iniFileName_ += TEXT(".ini");
 		TCHAR ext[32];
 		_stprintf_s(ext, TEXT("_%u.tmp"), GetCurrentProcessId());
-		tmpSpecFileName_ = tstring(path) + ext;
+		tmpSpecFileName_ += ext;
 	}
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
@@ -327,7 +330,10 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			TCHAR currDir[MAX_PATH];
 			if (s_.execGetCookie == TEXT("cmd /c echo ;")) {
 				strcpy_s(cookie_, ";");
-			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(nullptr, currDir, _countof(currDir)) && PathRemoveFileSpec(currDir)) {
+			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(nullptr, currDir, _countof(currDir))) {
+				for (size_t i = _tcslen(currDir); i > 0 && !_tcschr(TEXT("/\\"), currDir[i - 1]); ) {
+					currDir[--i] = TEXT('\0');
+				}
 				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
 					cookie_[0] = '\0';
 					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。", TVTest::LOG_TYPE_ERROR);
@@ -513,17 +519,24 @@ void CNicoJK::LoadFromIni()
 	// 実況ログフォルダのパスを作成
 	TCHAR path[MAX_PATH];
 	GetBufferedProfileString(buf.data(), TEXT("logfileFolder"), TEXT("Plugins\\NicoJK"), path, _countof(path));
-	if (path[0] && PathIsRelative(path)) {
-		TCHAR dir[MAX_PATH], abs[MAX_PATH];
-		if (GetLongModuleFileName(nullptr, dir, _countof(dir)) && PathRemoveFileSpec(dir) && PathCombine(abs, dir, path)) {
-			s_.logfileFolder = abs;
+	if (path[0] && !_tcschr(TEXT("/\\"), path[0]) && path[1] != TEXT(':')) {
+		// 相対パス
+		TCHAR dir[MAX_PATH];
+		if (GetLongModuleFileName(nullptr, dir, _countof(dir))) {
+			s_.logfileFolder = dir;
+			size_t lastSep = s_.logfileFolder.find_last_of(TEXT("/\\"));
+			if (lastSep != tstring::npos) {
+				s_.logfileFolder.erase(lastSep + 1);
+			}
+			s_.logfileFolder += path;
 		} else {
 			s_.logfileFolder.clear();
 		}
 	} else {
 		s_.logfileFolder = path;
 	}
-	if (!PathIsDirectory(s_.logfileFolder.c_str())) {
+	DWORD attr = GetFileAttributes(s_.logfileFolder.c_str());
+	if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY) == 0) {
 		s_.logfileFolder.clear();
 	}
 
@@ -752,10 +765,11 @@ bool CNicoJK::GetCurrentTot(FILETIME *pft)
 // 現在のBonDriverが':'区切りのリストに含まれるかどうか調べる
 bool CNicoJK::IsMatchDriverName(LPCTSTR drivers)
 {
-	TCHAR path[MAX_PATH];
-	m_pApp->GetDriverName(path, _countof(path));
-	LPCTSTR name = PathFindFileName(path);
-	size_t len = _tcslen(name);
+	std::vector<TCHAR> path(m_pApp->GetDriverName(nullptr, 0) + 1);
+	m_pApp->GetDriverName(path.data(), static_cast<int>(path.size()));
+	LPCTSTR name = path.data() + _tcslen(path.data());
+	size_t len = 0;
+	for (; name != path.data() && !_tcschr(TEXT("/\\"), name[-1]); --name, ++len);
 	if (len > 0) {
 		for (LPCTSTR p = drivers; *p; ++p) {
 			if ((p == drivers || p[-1] == TEXT(':')) && !_tcsnicmp(p, name, len) && (!p[len] || p[len] == TEXT(':'))) {
@@ -790,7 +804,7 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 		TCHAR name[64];
 		_stprintf_s(name, TEXT("\\jk%d"), jkID);
 		tstring path = s_.logfileFolder + name;
-		if (GetChatDate(&tm, text) && (PathFileExists(path.c_str()) || CreateDirectory(path.c_str(), nullptr))) {
+		if (GetChatDate(&tm, text) && (GetFileAttributes(path.c_str()) != INVALID_FILE_ATTRIBUTES || CreateDirectory(path.c_str(), nullptr))) {
 			// ロックファイルを開く
 			path += TEXT("\\lockfile");
 			hLogfileLock_ = CreateFile(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -923,7 +937,9 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 
 							TCHAR debug[32];
 							_stprintf_s(debug, TEXT("jk%d\\"), jkID);
-							OutputMessageLog((tstring(TEXT("ログファイル\"")) + debug + PathFindFileName(path.c_str()) + TEXT("\"の読み込みを開始しました。")).c_str());
+							size_t lastSep = path.find_last_of(TEXT("/\\"));
+							OutputMessageLog((tstring(TEXT("ログファイル\"")) + debug + &path.c_str()[lastSep == tstring::npos ? 0 : lastSep + 1] +
+							                  TEXT("\"の読み込みを開始しました。")).c_str());
 							break;
 						}
 					}
@@ -1174,8 +1190,10 @@ BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 			std::vector<TCHAR> buf(DragQueryFile(reinterpret_cast<HDROP>(wParam), i - 1, nullptr, 0) + 1);
 			if (DragQueryFile(reinterpret_cast<HDROP>(wParam), i - 1, buf.data(), (UINT)buf.size())) {
 				pThis->dropFileName_ = buf.data();
-				LPCTSTR ext = PathFindExtension(pThis->dropFileName_.c_str());
-				if (!_tcsicmp(ext, TEXT(".jkl")) || !_tcsicmp(ext, TEXT(".xml")) || !_tcsicmp(ext, TEXT(".txt"))) {
+				if (pThis->dropFileName_.size() >= 5 && !_tcschr(TEXT("/\\"), *(pThis->dropFileName_.end() - 5)) &&
+				    (!_tcsicmp(&pThis->dropFileName_.c_str()[pThis->dropFileName_.size() - 4], TEXT(".jkl")) ||
+				     !_tcsicmp(&pThis->dropFileName_.c_str()[pThis->dropFileName_.size() - 4], TEXT(".xml")) ||
+				     !_tcsicmp(&pThis->dropFileName_.c_str()[pThis->dropFileName_.size() - 4], TEXT(".txt")))) {
 					if (pThis->bSpecFile_) {
 						pThis->ReadFromLogfile(-1);
 						DeleteFile(pThis->tmpSpecFileName_.c_str());

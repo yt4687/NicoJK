@@ -22,7 +22,7 @@
 #include <WindowsX.h>
 #include <WinSock2.h>
 #include <MMSystem.h>
-#include <Shlwapi.h>
+#include <objbase.h>
 #include <GdiPlus.h>
 #include <vector>
 #include <list>
@@ -39,7 +39,6 @@
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "imm32.lib")
