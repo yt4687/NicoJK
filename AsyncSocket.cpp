@@ -24,7 +24,7 @@ CAsyncSocket::~CAsyncSocket()
 bool CAsyncSocket::Send(HWND hwnd, UINT msg, const char *name, unsigned short port, const char *buf, int len, bool bKeepSession)
 {
 	if (len < 0) {
-		len = lstrlenA(buf);
+		len = static_cast<int>(strlen(buf));
 	}
 	if (len > 0) {
 		// 前のデータを送信済みのときだけ送信データを追加できる

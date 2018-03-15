@@ -234,8 +234,8 @@ void CCommentWindow::SetStyle(LPCTSTR fontName, LPCTSTR fontNameMulti, bool bBol
 {
 	WaitForIdleDrawingThread();
 	ClearChat();
-	lstrcpyn(fontName_, fontName, _countof(fontName_));
-	lstrcpyn(fontNameMulti_, fontNameMulti, _countof(fontNameMulti_));
+	_tcsncpy_s(fontName_, fontName, _TRUNCATE);
+	_tcsncpy_s(fontNameMulti_, fontNameMulti, _TRUNCATE);
 	fontStyle_ = bBold ? Gdiplus::FontStyleBold : Gdiplus::FontStyleRegular;
 	bAntiAlias_ = bAntiAlias;
 	fontOutline_ = max(fontOutline, 0);
@@ -374,7 +374,7 @@ void CCommentWindow::AddChat(LPCTSTR text, COLORREF color, CHAT_POSITION positio
 		c.alignFactor = position==CHAT_POS_DEFAULT || align==CHAT_ALIGN_LEFT ? 0 : align==CHAT_ALIGN_RIGHT ? 2 : 1;
 		c.bInsertLast = position!=CHAT_POS_DEFAULT && bInsertLast;
 		c.text = text;
-		c.bMultiLine = c.text.find(TEXT('\n')) != std::wstring::npos;
+		c.bMultiLine = c.text.find(TEXT('\n')) != tstring::npos;
 		c.bDrew = false;
 		// 一時リストに追加(描画時にchatList_にマージ)
 		CBlockLock lock(&chatLock_);
@@ -671,7 +671,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 		Gdiplus::Font tmpFontMulti(fontNameMulti_, fontEm, fontStyle_);
 		Gdiplus::Font tmpFontMultiSmall(fontNameMulti_, fontEmSmall, fontStyle_);
 		// 可能なら同じオブジェクトを参照しておく(いいことあるかもしれないので)
-		bool bSameMultiFont = !lstrcmp(fontName_, fontNameMulti_);
+		bool bSameMultiFont = !_tcscmp(fontName_, fontNameMulti_);
 		const Gdiplus::Font &fontMulti = bSameMultiFont ? font : tmpFontMulti;
 		const Gdiplus::Font &fontMultiSmall = bSameMultiFont ? fontSmall : tmpFontMultiSmall;
 
@@ -1004,7 +1004,7 @@ void CCommentWindow::DrawChat(Gdiplus::Graphics &g, int width, int height, RECT 
 				s_count = 0;
 			}
 			TCHAR text[64];
-			wsprintf(text, TEXT("%dfps %2dobj(%dopm)"), s_fps, (int)chatList_.size(), (int)chatList_.size() * 60000 / displayDuration_);
+			_stprintf_s(text, TEXT("%dfps %2dobj(%dopm)"), s_fps, (int)chatList_.size(), (int)chatList_.size() * 60000 / displayDuration_);
 			Gdiplus::SolidBrush br(s_count % 2 ? Gdiplus::Color::Lime : Gdiplus::Color::Black);
 			g.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
 			g.DrawString(text, -1, &font, s_count % 2 ? Gdiplus::PointF(0, 0) : Gdiplus::PointF(2, 2), &br);

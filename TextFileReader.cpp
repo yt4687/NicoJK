@@ -46,22 +46,22 @@ bool CTextFileReader::ResetPointer()
 // 1行またはNULを含む最大textMax(>0)バイト読み込む
 // 改行文字は取り除く
 // 戻り値はNULを含む読み込まれたバイト数、終端に達すると0を返す
-int CTextFileReader::ReadLine(char *text, int textMax)
+size_t CTextFileReader::ReadLine(char *text, size_t textMax)
 {
 	if (!IsOpen()) {
 		return 0;
 	}
-	int textLen = 0;
+	size_t textLen = 0;
 	for (;;) {
 		if (!bEof_) {
-			int bufLen = lstrlenA(buf_);
+			size_t bufLen = strlen(buf_);
 			DWORD read;
-			if (!ReadFile(hFile_, buf_ + bufLen, BUF_SIZE - bufLen - 1, &read, nullptr)) {
+			if (!ReadFile(hFile_, buf_ + bufLen, static_cast<DWORD>(BUF_SIZE - bufLen - 1), &read, nullptr)) {
 				buf_[bufLen] = '\0';
 				bEof_ = true;
 			} else {
 				buf_[bufLen + read] = '\0';
-				if (lstrlenA(buf_) < BUF_SIZE - 1) {
+				if (strlen(buf_) < BUF_SIZE - 1) {
 					bEof_ = true;
 				}
 			}
@@ -69,10 +69,10 @@ int CTextFileReader::ReadLine(char *text, int textMax)
 		if (!textLen && !buf_[0]) {
 			return 0;
 		}
-		int lineLen = StrCSpnA(buf_, "\n");
-		int copyNum = min(lineLen + 1, textMax - textLen);
-		lstrcpynA(text + textLen, buf_, copyNum);
-		textLen += copyNum - 1;
+		size_t lineLen = strcspn(buf_, "\n");
+		size_t copyNum = min(lineLen, textMax - textLen - 1);
+		strncpy_s(text + textLen, textMax - textLen, buf_, copyNum);
+		textLen += copyNum;
 		if (lineLen < BUF_SIZE - 1) {
 			if (buf_[lineLen] == '\n') ++lineLen;
 			memmove(buf_, buf_ + lineLen, sizeof(buf_) - lineLen);
@@ -89,35 +89,36 @@ int CTextFileReader::ReadLine(char *text, int textMax)
 // 改行文字は取り除く
 // ファイルポインタは先頭に戻る
 // 戻り値はNULを含む読み込まれたバイト数
-int CTextFileReader::ReadLastLine(char *text, int textMax)
+size_t CTextFileReader::ReadLastLine(char *text, size_t textMax)
 {
 	if (!IsOpen()) {
 		return 0;
 	}
 	// 2GB以上には対応しない
-	DWORD fileSize = GetFileSize(hFile_, nullptr);
+	size_t fileSize = GetFileSize(hFile_, nullptr);
 	if (fileSize > 0x7FFFFFFF ||
-	    SetFilePointer(hFile_, -min(textMax - 1, static_cast<int>(fileSize)), nullptr, FILE_END) == INVALID_SET_FILE_POINTER) {
+	    SetFilePointer(hFile_, -static_cast<int>(min(textMax - 1, fileSize)), nullptr, FILE_END) == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}
 	DWORD read;
-	if (!ReadFile(hFile_, text, textMax - 1, &read, nullptr)) {
+	if (!ReadFile(hFile_, text, static_cast<DWORD>(textMax - 1), &read, nullptr)) {
 		ResetPointer();
 		return 0;
 	}
 	text[read] = '\0';
-	int textLen = lstrlenA(text);
+	size_t textLen = strlen(text);
 	if (textLen >= 1 && text[textLen-1] == '\n') {
 		text[--textLen] = '\0';
 	}
 	if (textLen >= 1 && text[textLen-1] == '\r') {
 		text[--textLen] = '\0';
 	}
-	char *p = StrRChrA(text, text + textLen, '\n');
-	if (p) {
-		++p;
-		memmove(text, p, textLen - static_cast<int>(p - text) + 1);
-		textLen -= static_cast<int>(p - text);
+	for (size_t i = textLen; i > 0; --i) {
+		if (text[i - 1] == '\n') {
+			memmove(text, text + i, textLen - i + 1);
+			textLen -= i;
+			break;
+		}
 	}
 	ResetPointer();
 	return textLen + 1;

@@ -50,11 +50,11 @@ private:
 		int commentDuration;
 		int commentDrawLineCount;
 		int logfileMode;
-		std::wstring logfileDrivers;
-		std::wstring nonTunerDrivers;
-		TCHAR logfileFolder[MAX_PATH];
-		std::wstring execGetCookie;
-		std::wstring mailDecorations;
+		tstring logfileDrivers;
+		tstring nonTunerDrivers;
+		tstring logfileFolder;
+		tstring execGetCookie;
+		tstring mailDecorations;
 		bool bAnonymity;
 		bool bUseOsdCompositor;
 		bool bUseTexture;
@@ -63,7 +63,7 @@ private:
 		bool bShowRadio;
 		bool bDoHalfClose;
 		int maxAutoReplace;
-		std::wstring abone;
+		tstring abone;
 		int dropLogfileMode;
 		int defaultPlaybackDelay;
 		int forwardList[26];
@@ -84,13 +84,13 @@ private:
 		int no;
 		COLORREF cr;
 		TCHAR marker[28];
-		std::wstring text;
+		tstring text;
 	};
 	struct RPL_ELEM {
 		int key;
-		std::wstring section;
-		std::wstring comment;
-		std::wstring pattern;
+		tstring section;
+		tstring comment;
+		tstring pattern;
 		std::regex re;
 		std::string fmt;
 		bool IsEnabled() const { return !pattern.empty() && TEXT('a') <= pattern[0] && pattern[0] <= TEXT('z'); }
@@ -116,7 +116,7 @@ private:
 	static BOOL CALLBACK WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT *pResult, void *pUserData);
 	bool ProcessChatTag(const char *tag, bool bShow = true, int showDelay = 0);
 	void OutputMessageLog(LPCTSTR text);
-	void GetPostComboBoxText(LPTSTR comm, int commSize, LPTSTR mail = nullptr, int mailSize = 0);
+	void GetPostComboBoxText(LPTSTR comm, size_t commSize, LPTSTR mail = nullptr, size_t mailSize = 0);
 	void ProcessLocalPost(LPCTSTR comm);
 	static LRESULT CALLBACK PanelWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK ForceWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -124,8 +124,8 @@ private:
 	LRESULT ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	static BOOL CALLBACK StreamCallback(BYTE *pData, void *pClientData);
 
-	// 設定ファイルの名前(Shlwapi使うのでMAX_PATHより大きくしても意味がない)
-	TCHAR szIniFileName_[MAX_PATH];
+	// 設定ファイルの名前
+	tstring iniFileName_;
 	SETTINGS s_;
 	std::vector<NETWORK_SERVICE_ID_ELEM> ntsIDList_;
 	std::vector<RPL_ELEM> rplList_;
@@ -142,7 +142,7 @@ private:
 	size_t logListDisplayedSize_;
 	bool bPendingTimerUpdateList_;
 	DWORD lastUpdateListTick_;
-	std::wstring lastCalcText_;
+	tstring lastCalcText_;
 	int lastCalcWidth_;
 
 	// コメント描画ウィンドウ
@@ -200,7 +200,7 @@ private:
 
 	// 指定ファイル再生
 	bool bSpecFile_;
-	TCHAR tmpSpecFileName_[MAX_PATH];
-	TCHAR dropFileName_[MAX_PATH];
+	tstring tmpSpecFileName_;
+	tstring dropFileName_;
 	int dropFileTimeout_;
 };

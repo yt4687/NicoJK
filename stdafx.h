@@ -50,3 +50,5 @@
 #undef max
 using std::min;
 using std::max;
+
+typedef std::basic_string<TCHAR> tstring;

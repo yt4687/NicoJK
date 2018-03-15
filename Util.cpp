@@ -51,41 +51,37 @@ std::vector<TCHAR> GetPrivateProfileSectionBuffer(LPCTSTR lpAppName, LPCTSTR lpF
 // GetPrivateProfileSection()で取得したバッファから、キーに対応する文字列を取得する
 void GetBufferedProfileString(LPCTSTR lpBuff, LPCTSTR lpKeyName, LPCTSTR lpDefault, LPTSTR lpReturnedString, DWORD nSize)
 {
-	int nKeyLen = lstrlen(lpKeyName);
-	if (nKeyLen <= 126) {
-		TCHAR szKey[128];
-		lstrcpy(szKey, lpKeyName);
-		lstrcpy(szKey + (nKeyLen++), TEXT("="));
-		while (*lpBuff) {
-			int nLen = lstrlen(lpBuff);
-			if (!StrCmpNI(lpBuff, szKey, nKeyLen)) {
-				if ((lpBuff[nKeyLen] == TEXT('\'') || lpBuff[nKeyLen] == TEXT('"')) &&
-				    nLen >= nKeyLen + 2 && lpBuff[nKeyLen] == lpBuff[nLen - 1]) {
-					lstrcpyn(lpReturnedString, lpBuff + nKeyLen + 1, min(nLen-nKeyLen-1, static_cast<int>(nSize)));
-				} else {
-					lstrcpyn(lpReturnedString, lpBuff + nKeyLen, nSize);
-				}
-				return;
+	size_t nKeyLen = _tcslen(lpKeyName);
+	while (*lpBuff) {
+		size_t nLen = _tcslen(lpBuff);
+		if (!_tcsnicmp(lpBuff, lpKeyName, nKeyLen) && lpBuff[nKeyLen] == TEXT('=')) {
+			if ((lpBuff[nKeyLen + 1] == TEXT('\'') || lpBuff[nKeyLen + 1] == TEXT('"')) &&
+			    nLen >= nKeyLen + 3 && lpBuff[nKeyLen + 1] == lpBuff[nLen - 1]) {
+				_tcsncpy_s(lpReturnedString, nSize, lpBuff + nKeyLen + 2, min(nLen - nKeyLen - 3, static_cast<size_t>(nSize - 1)));
+			} else {
+				_tcsncpy_s(lpReturnedString, nSize, lpBuff + nKeyLen + 1, _TRUNCATE);
 			}
-			lpBuff += nLen + 1;
+			return;
 		}
+		lpBuff += nLen + 1;
 	}
-	lstrcpyn(lpReturnedString, lpDefault, nSize);
+	_tcsncpy_s(lpReturnedString, nSize, lpDefault, _TRUNCATE);
 }
 
 // GetPrivateProfileSection()で取得したバッファから、キーに対応する数値を取得する
 int GetBufferedProfileInt(LPCTSTR lpBuff, LPCTSTR lpKeyName, int nDefault)
 {
-	TCHAR sz[24];
+	TCHAR sz[16];
 	GetBufferedProfileString(lpBuff, lpKeyName, TEXT(""), sz, _countof(sz));
-	int nRet;
-	return StrToIntEx(sz, STIF_DEFAULT, &nRet) ? nRet : nDefault;
+	LPTSTR endp;
+	int nRet = _tcstol(sz, &endp, 10);
+	return endp == sz ? nDefault : nRet;
 }
 
 BOOL WritePrivateProfileInt(LPCTSTR lpAppName, LPCTSTR lpKeyName, int value, LPCTSTR lpFileName)
 {
-	TCHAR sz[24];
-	wsprintf(sz, TEXT("%d"), value);
+	TCHAR sz[16];
+	_stprintf_s(sz, TEXT("%d"), value);
 	return WritePrivateProfileString(lpAppName, lpKeyName, sz, lpFileName);
 }
 
@@ -98,18 +94,6 @@ DWORD GetLongModuleFileName(HMODULE hModule, LPTSTR lpFileName, DWORD nSize)
 		if (nRet < nSize) return nRet;
 	}
 	return 0;
-}
-
-// HTTPヘッダフィールドを連結付加する
-void AppendHttpHeader(char *str, const char *field, const char *value, const char *trail)
-{
-	// valueが空文字列なら何もしない
-	if (value[0]) {
-		int n = lstrlenA(str);
-		lstrcatA(&str[n], field);
-		lstrcatA(&str[n], value);
-		lstrcatA(&str[n], trail);
-	}
 }
 
 size_t FindHttpBody(const char *str)
@@ -150,8 +134,8 @@ void DecodeEntityReference(TCHAR *str)
 	for (; *str; ++p) {
 		if ((*p = *str++) == TEXT('&')) {
 			for (int i = 0; i < _countof(ENT_REF); ++i) {
-				int len = lstrlen(ENT_REF[i].ref);
-				if (!StrCmpN(str, ENT_REF[i].ref, len)) {
+				size_t len = _tcslen(ENT_REF[i].ref);
+				if (!_tcsncmp(str, ENT_REF[i].ref, len)) {
 					str += len;
 					*p = ENT_REF[i].ent;
 					break;
@@ -162,17 +146,19 @@ void DecodeEntityReference(TCHAR *str)
 	*p = TEXT('\0');
 }
 
-void EncodeEntityReference(const char *src, char *dest, int destSize)
+void EncodeEntityReference(const char *src, char *dest, size_t destSize)
 {
 	// 切り捨てを防ぐには'&'に対して5倍のバッファを見積もる
 	dest[0] = '\0';
 	for (; *src; ++src) {
 		char s[2] = {*src};
 		const char *p = *s=='<' ? "&lt;" : *s=='>' ? "&gt;" : *s=='&' ? "&amp;" : s;
-		if (lstrlenA(dest) + lstrlenA(p) >= destSize) {
+		if (strlen(p) >= destSize) {
 			break;
 		}
-		lstrcatA(dest, p);
+		strcpy_s(dest, destSize, p);
+		dest += strlen(p);
+		destSize -= strlen(p);
 	}
 }
 
@@ -271,7 +257,7 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".txt")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
+	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".txt")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
 		std::cmatch m;
@@ -327,7 +313,7 @@ static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".jkl")) && !_tfopen_s(&fp, srcPath, TEXT("rbN"))) {
+	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".jkl")) && !_tfopen_s(&fp, srcPath, TEXT("rbN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		char buf[4096];
 		if (fread(buf, sizeof(char), 10, fpSrc.get()) == 10 && !memcmp(buf, "<JikkyoRec", 10) && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
@@ -363,7 +349,7 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 {
 	std::unique_ptr<FILE, decltype(&fclose)> fpDest(nullptr, fclose);
 	FILE *fp;
-	if (!lstrcmpi(PathFindExtension(srcPath), TEXT(".xml")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
+	if (!_tcsicmp(PathFindExtension(srcPath), TEXT(".xml")) && !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		char buf[4096];
 		if (fgets(buf, _countof(buf), fpSrc.get()) && strstr(buf, "<?xml") && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
@@ -374,11 +360,11 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 			tag[0] = '\0';
 			unsigned int tmOld = 0;
 			while (fgets(buf, _countof(buf), fpSrc.get())) {
-				if (lstrlenA(buf) >= static_cast<int>(_countof(tag)) - lstrlenA(tag)) {
+				if (strlen(buf) >= _countof(tag) - strlen(tag)) {
 					tag[0] = '\0';
 					continue;
 				}
-				lstrcatA(tag, buf);
+				strcat_s(tag, buf);
 				if (std::regex_search(tag, m, re)) {
 					WriteChatTag(fpDest.get(), m, &tmOld, tmNew);
 					tag[0] = '\0';
@@ -397,7 +383,7 @@ bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew)
 }
 
 // 指定プロセスを実行して標準出力の文字列を得る
-bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bufSize, int timeout)
+bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, size_t bufSize, int timeout)
 {
 	bool bRet = false;
 	SECURITY_ATTRIBUTES sa;
@@ -412,9 +398,9 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 			si.dwFlags = STARTF_USESTDHANDLES;
 			si.hStdOutput = hWritePipe;
 			PROCESS_INFORMATION pi;
-			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + lstrlen(commandLine) + 1);
+			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + _tcslen(commandLine) + 1);
 			if (CreateProcess(nullptr, commandLineBuf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
-				int bufCount = 0;
+				size_t bufCount = 0;
 				bool bBreak = false;
 				bRet = true;
 				while (!bBreak) {
@@ -427,7 +413,7 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, int bu
 					}
 					DWORD avail;
 					if (PeekNamedPipe(hReadPipe, nullptr, 0, nullptr, &avail, nullptr) && avail != 0) {
-						if (bufCount + (int)avail >= bufSize) {
+						if (bufCount + avail >= bufSize) {
 							bBreak = true;
 							bRet = false;
 						} else {

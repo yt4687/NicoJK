@@ -68,14 +68,14 @@ private:
 		bool bDrew;
 		int currentDrawWidth;
 		int currentDrawHeight;
-		std::wstring text;
+		tstring text;
 	};
 	struct TEXTURE {
 		bool bUsed;
 		bool bSmall;
 		RECT rc;
 		Gdiplus::ARGB color;
-		std::wstring text;
+		tstring text;
 		bool IsMatch(const CHAT &c) const { return c.color == color && c.bSmall == bSmall && c.text == text; }
 	};
 	bool AllocateWorkBitmap(int width, int height, bool *pbRealloc);
