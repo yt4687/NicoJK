@@ -29,12 +29,12 @@ bool CAsyncSocket::Send(HWND hwnd, UINT msg, const char *name, unsigned short po
 	if (len > 0) {
 		// 前のデータを送信済みのときだけ送信データを追加できる
 		if (IsPending() && !name && bKeepSession_ && sendBuf_.empty()) {
-			sendBuf_.assign(&buf[0], &buf[len]);
+			sendBuf_.assign(buf, buf + len);
 			bKeepSession_ = bKeepSession;
 			PostMessage(hwnd_, msg_, (WPARAM)soc_, WSAMAKESELECTREPLY(FD_WRITE, 0));
 			return true;
 		} else if (!IsPending() && name) {
-			sendBuf_.assign(&buf[0], &buf[len]);
+			sendBuf_.assign(buf, buf + len);
 			hwnd_ = hwnd;
 			msg_ = msg;
 			name_ = name;
@@ -135,7 +135,7 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 						// FD_CLOSEで拾うので無視
 						return 0;
 					}
-					recvBuf->insert(recvBuf->end(), &buf[0], &buf[read]);
+					recvBuf->insert(recvBuf->end(), buf, buf + read);
 				}
 				break;
 			case FD_CLOSE:
@@ -150,7 +150,7 @@ int CAsyncSocket::ProcessRecv(WPARAM wParam, LPARAM lParam, std::vector<char> *r
 						Close();
 						return read == 0 ? -2 : -1;
 					}
-					recvBuf->insert(recvBuf->end(), &buf[0], &buf[read]);
+					recvBuf->insert(recvBuf->end(), buf, buf + read);
 				}
 				break;
 			}

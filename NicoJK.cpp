@@ -311,7 +311,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 						f.jkID = e.jkID;
 						f.name = TEXT("");
 						const JKID_NAME_ELEM *p = std::lower_bound(
-							DEFAULT_JKID_NAME_TABLE, &DEFAULT_JKID_NAME_TABLE[_countof(DEFAULT_JKID_NAME_TABLE)], f,
+							DEFAULT_JKID_NAME_TABLE, DEFAULT_JKID_NAME_TABLE + _countof(DEFAULT_JKID_NAME_TABLE), f,
 							[](const JKID_NAME_ELEM &a, const JKID_NAME_ELEM &b) { return a.jkID < b.jkID; });
 						if (p && p->jkID == f.jkID) {
 							f.name = p->name;
