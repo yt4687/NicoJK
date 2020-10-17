@@ -327,38 +327,12 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 			}
 			// 必要ならサーバに渡すCookieを取得
 			cookie_[0] = '\0';
-			TCHAR currDir[MAX_PATH];
-			if (s_.execGetCookie == TEXT("cmd /c echo ;")) {
-				strcpy_s(cookie_, ";");
-			} else if (!s_.execGetCookie.empty() && GetLongModuleFileName(nullptr, currDir, _countof(currDir))) {
-				for (size_t i = _tcslen(currDir); i > 0 && !_tcschr(TEXT("/\\"), currDir[i - 1]); ) {
-					currDir[--i] = TEXT('\0');
-				}
-				if (!GetProcessOutput(s_.execGetCookie.c_str(), currDir, cookie_, _countof(cookie_), 10000)) {
-					cookie_[0] = '\0';
+			if (!s_.execGetCookie.empty()) {
+				std::string strCookie = GetCookieString(s_.execGetCookie.c_str(), s_.execGetV10Key.c_str(), cookie_, _countof(cookie_), 10000);
+				if (strCookie.empty()) {
 					m_pApp->AddLog(L"execGetCookieの実行に失敗しました。", TVTest::LOG_TYPE_ERROR);
-				} else {
-					// 改行->';'
-					for (size_t i = strlen(cookie_); i > 0 && strchr(" \t\n\r", cookie_[i - 1]); ) {
-						cookie_[--i] = '\0';
-					}
-					std::string strCookie;
-					for (char *p = cookie_ + strspn(cookie_, " \t\n\r"); *p; ) {
-						char *q = p + strcspn(p, "=\r\n");
-						char *r = q + strcspn(q, "\r\n");
-						strCookie.append(p, q);
-						if (q[0] == '=' && (q[1] == 'X' || q[1] == 'x') && q[2] == '\'') {
-							// 値がX'で始まるときはDPAPIでプロテクトされたBLOBとみなす
-							strCookie += '=';
-							strCookie += UnprotectDpapiToString(&q[3]);
-						} else {
-							strCookie.append(q, r);
-						}
-						strCookie += ';';
-						if (*(p = r + strcspn(r, "\n")) != '\0') ++p;
-					}
-					strncpy_s(cookie_, strCookie.c_str(), _TRUNCATE);
 				}
+				strncpy_s(cookie_, strCookie.c_str(), _TRUNCATE);
 			}
 			// 破棄のタイミングがややこしいので勢い窓のフォントはここで作る
 			if (!hForceFont_) {
@@ -500,6 +474,8 @@ void CNicoJK::LoadFromIni()
 	s_.nonTunerDrivers = val;
 	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
 	s_.execGetCookie = val;
+	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
+	s_.execGetV10Key = val;
 	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
 	                         TEXT("[cyan big]:[shita]:[green shita small]:[orange]::"),
 	                         val, _countof(val));

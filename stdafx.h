@@ -35,14 +35,12 @@
 #include <CommDlg.h>
 #include <ShellAPI.h>
 #include <process.h>
-#include <WinCrypt.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "imm32.lib")
-#pragma comment(lib, "crypt32.lib")
 
 // NOMINMAXではGdiPlus.hが通らない
 #undef min

@@ -28,17 +28,24 @@ NicoJK.iniを確認してください。
 
 ■コメント投稿について
 コメント投稿機能を有効にする場合は以下の作業を行ってください:
+※DTV板の有志により、ブラウザに依存しないログインツールなども提供されています。
 1."sqlite3.exe"を用意
-  http://www.sqlite.org/download.html の「Precompiled Binaries for Windows」から
-  "sqlite-shell-win32-x86-{数字}.zip"をダウンロードして、中身の"sqlite3.exe"を
+  https://sqlite.org/download.html の「Precompiled Binaries for Windows」から
+  "sqlite-tools-win32-x86-{数字}.zip"をダウンロードして、中身の"sqlite3.exe"を
   TVTest.exeのある場所かパスの通った場所(C:\windows あたりがオススメ)に配置
+2.必要なら"jq.exe"を用意
+  https://stedolan.github.io/jq/ から"jq-win32.exe"か"jq-win64.exe"をダウンロー
+  ドして、"jq.exe"にリネームして上記と同様に配置
 2.ブラウザでニコニコ実況にログイン
-  FirefoxまたはGoogleChromeで http://jk.nicovideo.jp/ にアクセスして各自のアカウ
-  ントでログイン
+  FirefoxやEdgeやGoogleChromeで http://jk.nicovideo.jp/ にアクセスして各自のアカ
+  ウントでログイン
 3.NicoJK.iniのexecGetCookieにブラウザのプロファイルフォルダを設定
   プロファイルフォルダの場所については「firefox cookies.sqlite」や「chrome
   cookie 保存場所」などのキーワードでググって見つけてください。正しく設定すれば
   プラグイン有効時にこのコマンドが実行され、勢い窓にコメント投稿欄が現れます
+4.必要ならexecGetV10Keyにもブラウザのプロファイルフォルダを設定
+  最近のEdgeやGoogleChromeのクッキー情報はブラウザのマスターキーで保護されている
+  ため、この設定も必要です
 
 コメント投稿欄の仕様は以下のとおりです:
 ・Enterキー押下で投稿

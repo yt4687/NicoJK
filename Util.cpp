@@ -1,5 +1,11 @@
 ﻿#include "stdafx.h"
 #include "Util.h"
+#include <wincrypt.h>
+#pragma comment(lib, "crypt32.lib")
+#ifndef NO_USE_CNG
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+#endif
 
 static const struct {
 	COLORREF color;
@@ -465,4 +471,137 @@ std::string UnprotectDpapiToString(const char *src)
 	SecureZeroMemory(out.pbData, out.cbData);
 	LocalFree(out.pbData);
 	return ret;
+}
+
+// v10(AES-GCM)でプロテクトされた文字列を復号する
+std::string UnprotectV10ToString(const char *src, const char *v10Key, char *buf, size_t bufSize)
+{
+	std::vector<BYTE> blob;
+	for (int i = 0;; ++i) {
+		char c = src[i];
+		if ('0' <= c && c <= '9') c -= '0';
+		else if ('A' <= c && c <= 'F') c -= 'A' - 10;
+		else if ('a' <= c && c <= 'f') c -= 'a' - 10;
+		else break;
+
+		if (i % 2) blob[i / 2] += c;
+		else blob.push_back(static_cast<BYTE>(c * 16));
+	}
+
+	// 鍵のBase64エンコードを解除
+	DATA_BLOB in;
+	in.cbData = static_cast<DWORD>(bufSize);
+	in.pbData = reinterpret_cast<BYTE*>(buf);
+	if (!CryptStringToBinaryA(v10Key, 0, CRYPT_STRING_BASE64, in.pbData, &in.cbData, nullptr, nullptr) ||
+	    in.cbData <= 5 ||
+	    memcmp(in.pbData, "DPAPI", 5)) {
+		return "";
+	}
+	// 鍵のDPAPIプロテクトを解除
+	in.cbData -= 5;
+	in.pbData += 5;
+	DATA_BLOB key = {};
+	if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &key) || !key.pbData) {
+		return "";
+	}
+
+	std::string ret;
+#ifndef NO_USE_CNG
+	if (blob.size() > 12 + 16 && key.cbData == 32) {
+		// AES-GCMを復号
+		BCRYPT_ALG_HANDLE hAlgo;
+		if (BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_AES_ALGORITHM, nullptr, 0))) {
+			WCHAR chainMode[] = BCRYPT_CHAIN_MODE_GCM;
+			BCRYPT_KEY_HANDLE hKey;
+			if (BCRYPT_SUCCESS(BCryptSetProperty(hAlgo, BCRYPT_CHAINING_MODE, reinterpret_cast<UCHAR*>(chainMode), sizeof(chainMode), 0)) &&
+			    BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(hAlgo, &hKey, nullptr, 0, key.pbData, key.cbData, 0))) {
+				BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
+				BCRYPT_INIT_AUTH_MODE_INFO(info);
+				// 入力の先頭12バイトはnonce
+				info.pbNonce = blob.data();
+				info.cbNonce = 12;
+				// 入力の末尾16バイトはタグ
+				info.pbTag = blob.data() + blob.size() - 16;
+				info.cbTag = 16;
+				ULONG resultLen;
+				if (BCRYPT_SUCCESS(BCryptDecrypt(hKey, blob.data() + 12, static_cast<ULONG>(blob.size() - 12 - 16), &info, nullptr, 0,
+				                   blob.data() + 12, static_cast<ULONG>(blob.size() - 12 - 16), &resultLen, 0))) {
+					blob[12 + resultLen] = 0;
+					ret = reinterpret_cast<char*>(blob.data() + 12);
+				}
+				SecureZeroMemory(blob.data(), blob.size());
+				BCryptDestroyKey(hKey);
+			}
+			BCryptCloseAlgorithmProvider(hAlgo, 0);
+		}
+	}
+#endif
+	SecureZeroMemory(key.pbData, key.cbData);
+	LocalFree(key.pbData);
+	return ret;
+}
+
+// コマンドを実行してCookieを得る
+std::string GetCookieString(LPCTSTR execGetCookie, LPCTSTR execGetV10Key, char *buf, size_t bufSize, int timeout)
+{
+	if (!_tcsicmp(execGetCookie, TEXT("cmd /c echo ;"))) {
+		return ";";
+	}
+	TCHAR currDir[MAX_PATH];
+	if (GetLongModuleFileName(nullptr, currDir, _countof(currDir))) {
+		for (size_t i = _tcslen(currDir); i > 0 && !_tcschr(TEXT("/\\"), currDir[i - 1]); ) {
+			currDir[--i] = TEXT('\0');
+		}
+		if (GetProcessOutput(execGetCookie, currDir, buf, bufSize, timeout)) {
+			std::string strBuf = buf + strspn(buf, " \t\n\r");
+			size_t pos = strBuf.find_last_not_of(" \t\n\r");
+			strBuf.erase(pos == std::string::npos ? 0 : pos + 1);
+			// 改行->';'
+			std::string ret, v10Key;
+			for (size_t i = 0; i < strBuf.size(); ) {
+				size_t endPos = strBuf.find_first_of("=\r\n", i);
+				if (endPos == std::string::npos || strBuf[endPos] != '=') {
+					// そのまま
+					ret.append(strBuf, i, endPos - i);
+				} else {
+					size_t valPos = endPos + 1;
+					endPos = strBuf.find_first_of("\r\n", valPos);
+					if (valPos + 1 < strBuf.size() && (strBuf[valPos] == 'X' || strBuf[valPos] == 'x') && strBuf[valPos + 1] == '\'') {
+						// BLOB
+						ret.append(strBuf, i, valPos - i);
+						if (!strBuf.compare(valPos + 2, 6, "763130")) {
+							// v10(AES-GCM)によるプロテクト
+							if (execGetV10Key[0]) {
+								if (v10Key.empty() && GetProcessOutput(execGetV10Key, currDir, buf, bufSize, timeout)) {
+									const char *p = buf + strspn(buf, " \t\n\r");
+									v10Key.assign(p, strcspn(p, " \t\n\r"));
+								}
+								if (v10Key.empty()) {
+									// 成否に関わらず1回だけ実行するため
+									v10Key = "!";
+								}
+								ret += UnprotectV10ToString(strBuf.c_str() + valPos + 8, v10Key.c_str(), buf, bufSize);
+							}
+						} else if (!strBuf.compare(valPos + 2, 8, "01000000")) {
+							// DPAPIによるプロテクト
+							ret += UnprotectDpapiToString(strBuf.c_str() + valPos + 2);
+						}
+					} else {
+						// そのまま
+						ret.append(strBuf, i, endPos - i);
+					}
+				}
+				ret += ';';
+				i = endPos;
+				if (i != std::string::npos) {
+					i = strBuf.find_first_of("\n", i);
+					if (i != std::string::npos) {
+						++i;
+					}
+				}
+			}
+			return ret;
+		}
+	}
+	return "";
 }

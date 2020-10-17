@@ -22,6 +22,8 @@ BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, size_t bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);
+std::string UnprotectV10ToString(const char *src, const char *v10Key, char *buf, size_t bufSize);
+std::string GetCookieString(LPCTSTR execGetCookie, LPCTSTR execGetV10Key, char *buf, size_t bufSize, int timeout);
 
 // HTTPヘッダフィールドを連結付加する
 template<size_t strSize>

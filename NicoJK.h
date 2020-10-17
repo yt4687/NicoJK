@@ -54,6 +54,7 @@ private:
 		tstring nonTunerDrivers;
 		tstring logfileFolder;
 		tstring execGetCookie;
+		tstring execGetV10Key;
 		tstring mailDecorations;
 		bool bAnonymity;
 		bool bUseOsdCompositor;
