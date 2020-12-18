@@ -41,7 +41,7 @@ inline void dprintf_real( const _TCHAR * fmt, ... )
 #define WM_SET_ZORDER (WM_APP + 107)
 #define WM_POST_COMMENT (WM_APP + 108)
 
-#define JK_HOST_NAME "jk.nicovideo.jp"
+#define DEFAULT_JK_HOST_NAME "jk.nicovideo.jp"
 
 enum {
 	TIMER_UPDATE = 1,
@@ -472,6 +472,17 @@ void CNicoJK::LoadFromIni()
 	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
 	                         val, _countof(val));
 	s_.nonTunerDrivers = val;
+	GetBufferedProfileString(buf.data(), TEXT("customJKHostName"), TEXT(DEFAULT_JK_HOST_NAME), val, _countof(val));
+	s_.jkHostName.clear();
+	for (LPCTSTR p = val; *p; ++p) {
+		if ((TEXT('0') <= *p && *p <= TEXT('9')) ||
+		    (TEXT('A') <= *p && *p <= TEXT('Z')) ||
+		    (TEXT('a') <= *p && *p <= TEXT('z')) ||
+		    *p == TEXT('.') || *p == TEXT('_') || *p == TEXT('-')) {
+			s_.jkHostName.push_back(static_cast<char>(*p));
+		}
+	}
+	s_.sendCookieToCustomJKHost = GetBufferedProfileInt(buf.data(), TEXT("sendCookieToCustomJKHost"), 0) != 0;
 	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
 	s_.execGetCookie = val;
 	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
@@ -2094,11 +2105,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// 勢いを更新する
 				char szGet[_countof(cookie_) + 256];
 				strcpy_s(szGet, "GET /api/v2_app/getchannels HTTP/1.1\r\n");
-				AppendHttpHeader(szGet, "Host: ", JK_HOST_NAME, "\r\n");
-				AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+				AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
+					AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+				}
 				AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
 				// 前回の通信が完了していなくてもfalseを返すだけ。気にせず呼ぶ
-				if (channelSocket_.Send(hwnd, WMS_FORCE, JK_HOST_NAME, 80, szGet)) {
+				if (channelSocket_.Send(hwnd, WMS_FORCE, s_.jkHostName.c_str(), 80, szGet)) {
 					channelBuf_.clear();
 				}
 			}
@@ -2114,10 +2127,12 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// パーマリンクを取得
 				char szGet[_countof(cookie_) + 256];
 				sprintf_s(szGet, "GET /api/v2/getflv?v=jk%d HTTP/1.1\r\n", currentJKToGet_);
-				AppendHttpHeader(szGet, "Host: ", JK_HOST_NAME, "\r\n");
-				AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+				AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
+					AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+				}
 				AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
-				if (jkSocket_.Send(hwnd, WMS_JK, JK_HOST_NAME, 80, szGet)) {
+				if (jkSocket_.Send(hwnd, WMS_JK, s_.jkHostName.c_str(), 80, szGet)) {
 					currentJK_ = currentJKToGet_;
 					bConnectedToCommentServer_ = false;
 					jkBuf_.clear();
@@ -2615,10 +2630,12 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					// ポストキー取得開始
 					char szGet[_countof(cookie_) + 256];
 					sprintf_s(szGet, "GET /api/v2/getpostkey?thread=%.15s&block_no=%d HTTP/1.1\r\n", mThread[1].str().c_str(), (lastChatNo_ + 1) / 100);
-					AppendHttpHeader(szGet, "Host: ", JK_HOST_NAME, "\r\n");
-					AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+					AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+					if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
+						AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+					}
 					AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
-					if (postSocket_.Send(hwnd, WMS_POST, JK_HOST_NAME, 80, szGet)) {
+					if (postSocket_.Send(hwnd, WMS_POST, s_.jkHostName.c_str(), 80, szGet)) {
 						postBuf_.clear();
 					}
 				}

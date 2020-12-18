@@ -53,6 +53,8 @@ private:
 		tstring logfileDrivers;
 		tstring nonTunerDrivers;
 		tstring logfileFolder;
+		std::string jkHostName;
+		bool sendCookieToCustomJKHost;
 		tstring execGetCookie;
 		tstring execGetV10Key;
 		tstring mailDecorations;
