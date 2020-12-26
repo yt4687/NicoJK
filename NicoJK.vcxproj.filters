@@ -27,7 +27,7 @@
     <ClInclude Include="resource.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="AsyncSocket.h">
+    <ClInclude Include="JKStream.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="CommentWindow.h">
@@ -59,7 +59,7 @@
     <ClCompile Include="NicoJK.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="AsyncSocket.cpp">
+    <ClCompile Include="JKStream.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="CommentWindow.cpp">

@@ -64,7 +64,6 @@ private:
 		bool bUseDrawingThread;
 		bool bSetChannel;
 		bool bShowRadio;
-		bool bDoHalfClose;
 		int maxAutoReplace;
 		tstring abone;
 		int dropLogfileMode;
@@ -160,9 +159,9 @@ private:
 	int forwardOffsetDelta_;
 
 	// 通信用
-	CAsyncSocket channelSocket_;
-	CAsyncSocket jkSocket_;
-	CAsyncSocket postSocket_;
+	CJKStream channelStream_;
+	CJKStream jkStream_;
+	CJKStream postStream_;
 	std::vector<char> channelBuf_;
 	std::vector<char> jkBuf_;
 	std::vector<char> postBuf_;

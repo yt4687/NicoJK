@@ -5,7 +5,7 @@
 
 #include "stdafx.h"
 #include "Util.h"
-#include "AsyncSocket.h"
+#include "JKStream.h"
 #include "TextFileReader.h"
 #include "CommentWindow.h"
 #define TVTEST_PLUGIN_CLASS_IMPLEMENT
@@ -200,16 +200,11 @@ bool CNicoJK::Initialize()
 		_stprintf_s(ext, TEXT("_%u.tmp"), GetCurrentProcessId());
 		tmpSpecFileName_ += ext;
 	}
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
-		return false;
-	}
 	// OsdCompositorは他プラグインと共用することがあるので、有効にするならFinalize()まで破棄しない
 	bool bEnableOsdCompositor = GetPrivateProfileInt(TEXT("Setting"), TEXT("enableOsdCompositor"), 0, iniFileName_.c_str()) != 0;
 	// フィルタグラフを取得できないバージョンではAPIフックを使う
 	bool bSetHookOsdCompositor = m_pApp->GetVersion() < TVTest::MakeVersion(0, 9, 0);
 	if (!commentWindow_.Initialize(g_hinstDLL, &bEnableOsdCompositor, bSetHookOsdCompositor)) {
-		WSACleanup();
 		return false;
 	}
 	if (bEnableOsdCompositor) {
@@ -291,7 +286,6 @@ bool CNicoJK::Finalize()
 		bDragAcceptFiles_ = false;
 	}
 	commentWindow_.Finalize();
-	WSACleanup();
 	return true;
 }
 
@@ -497,7 +491,6 @@ void CNicoJK::LoadFromIni()
 	s_.bUseDrawingThread	= GetBufferedProfileInt(buf.data(), TEXT("useDrawingThread"), 1) != 0;
 	s_.bSetChannel			= GetBufferedProfileInt(buf.data(), TEXT("setChannel"), 1) != 0;
 	s_.bShowRadio			= GetBufferedProfileInt(buf.data(), TEXT("showRadio"), 0) != 0;
-	s_.bDoHalfClose			= GetBufferedProfileInt(buf.data(), TEXT("doHalfClose"), 0) != 0;
 	s_.maxAutoReplace		= GetBufferedProfileInt(buf.data(), TEXT("maxAutoReplace"), 20);
 	GetBufferedProfileString(buf.data(), TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
 	s_.abone = val;
@@ -1707,10 +1700,6 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			dropFileTimeout_ = 0;
 			SendMessage(hwnd, WM_RESET_STREAM, 0, 0);
 
-			channelSocket_.SetDoHalfClose(s_.bDoHalfClose);
-			jkSocket_.SetDoHalfClose(s_.bDoHalfClose);
-			postSocket_.SetDoHalfClose(s_.bDoHalfClose);
-
 			SendDlgItemMessage(hwnd, bDisplayLogList_ ? IDC_RADIO_LOG : IDC_RADIO_FORCE, BM_SETCHECK, BST_CHECKED, 0);
 			SendDlgItemMessage(hwnd, IDC_CHECK_RELATIVE, BM_SETCHECK, s_.bSetRelative ? BST_CHECKED : BST_UNCHECKED, 0);
 			SendDlgItemMessage(hwnd, IDC_SLIDER_OPACITY, TBM_SETRANGE, TRUE, MAKELPARAM(0, 10));
@@ -1809,9 +1798,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				DeleteFile(tmpSpecFileName_.c_str());
 			}
 			commentWindow_.Destroy();
-			channelSocket_.Close();
-			jkSocket_.Close();
-			postSocket_.Close();
+
+			channelStream_.BeginClose();
+			jkStream_.BeginClose();
+			postStream_.BeginClose();
+			channelStream_.Close();
+			jkStream_.Close();
+			postStream_.Close();
 
 			if (hSyncThread_) {
 				bQuitSyncThread_ = true;
@@ -2000,7 +1993,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					}
 					if (currentJKToGet_ != jkID) {
 						currentJKToGet_ = jkID;
-						jkSocket_.Shutdown();
+						jkStream_.Shutdown();
 						commentWindow_.ClearChat();
 						SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 					}
@@ -2104,14 +2097,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			if (!bDisplayLogList_ && IsWindowVisible(hwnd)) {
 				// 勢いを更新する
 				char szGet[_countof(cookie_) + 256];
-				strcpy_s(szGet, "GET /api/v2_app/getchannels HTTP/1.1\r\n");
-				AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+				strcpy_s(szGet, s_.jkHostName.c_str());
 				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-					AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+					strcat_s(szGet, " ");
+					strcat_s(szGet, cookie_);
 				}
-				AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
 				// 前回の通信が完了していなくてもfalseを返すだけ。気にせず呼ぶ
-				if (channelSocket_.Send(hwnd, WMS_FORCE, s_.jkHostName.c_str(), 80, szGet)) {
+				if (channelStream_.Send(hwnd, WMS_FORCE, 'H', szGet)) {
 					channelBuf_.clear();
 				}
 			}
@@ -2120,19 +2112,18 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SetTimer(hwnd, TIMER_JK_WATCHDOG, max(JK_WATCHDOG_INTERVAL, 10000), nullptr);
 			if (jkLeaveThreadCheck_ > 0 && --jkLeaveThreadCheck_ == 0) {
 				OutputMessageLog(TEXT("leave_threadタグにより切断します。"));
-				jkSocket_.Shutdown();
+				jkStream_.Shutdown();
 				SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 			}
 			if (currentJKToGet_ >= 0 && !bUsingLogfileDriver_) {
 				// パーマリンクを取得
 				char szGet[_countof(cookie_) + 256];
-				sprintf_s(szGet, "GET /api/v2/getflv?v=jk%d HTTP/1.1\r\n", currentJKToGet_);
-				AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+				sprintf_s(szGet, "jk%d %s", currentJKToGet_, s_.jkHostName.c_str());
 				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-					AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+					strcat_s(szGet, " ");
+					strcat_s(szGet, cookie_);
 				}
-				AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
-				if (jkSocket_.Send(hwnd, WMS_JK, s_.jkHostName.c_str(), 80, szGet)) {
+				if (jkStream_.Send(hwnd, WMS_JK, 'F', szGet)) {
 					currentJK_ = currentJKToGet_;
 					bConnectedToCommentServer_ = false;
 					jkBuf_.clear();
@@ -2214,7 +2205,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					(it->jkID & ~NETWORK_SERVICE_ID_ELEM::JKID_PRIOR) : -1;
 				if (currentJKToGet_ != jkID) {
 					currentJKToGet_ = jkID;
-					jkSocket_.Shutdown();
+					jkStream_.Shutdown();
 					commentWindow_.ClearChat();
 					SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
 					// 選択項目を更新するため
@@ -2371,13 +2362,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			static const std::regex reForce("<force>(\\d+)</force>");
 			static const std::regex reName("<name>([^<]*)</name>");
 
-			int ret = channelSocket_.ProcessRecv(wParam, lParam, &channelBuf_);
+			int ret = channelStream_.ProcessRecv(channelBuf_);
 			if (ret == -2) {
 				// 切断
 				channelBuf_.push_back('\0');
 				bool bCleared = false;
 				std::cmatch m, mVideo, mForce, mName;
-				const char *p = &channelBuf_[FindHttpBody(&channelBuf_[0])];
+				const char *p = channelBuf_.data();
 				const char *pLast = &p[strlen(p)];
 				for (; std::regex_search(p, pLast, m, s_.bShowRadio ? reChannelRadio : reChannel); p = m[0].second) {
 					if (std::regex_search(m[2].first, m[2].second, mVideo, reVideo) &&
@@ -2413,7 +2404,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			static const std::regex reChatResult("^<chat_result(?= ).*? status=\"(?!0\")(\\d+)\"");
 			static const std::regex reLeaveThreadID("^<leave_thread(?= )(?=.*? reason=\"2\").*? thread=\"(\\d+)\"");
 
-			int ret = jkSocket_.ProcessRecv(wParam, lParam, &jkBuf_);
+			int ret = jkStream_.ProcessRecv(jkBuf_);
 			if (ret < 0) {
 				// 切断
 				if (bConnectedToCommentServer_) {
@@ -2422,9 +2413,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					jkLeaveThreadCheck_ = 0;
 					OutputMessageLog(TEXT("コメントサーバとの通信を切断しました。"));
 					WriteToLogfile(-1);
-				} else if (ret == -2 && currentJK_ == currentJKToGet_) {
-					jkBuf_.push_back('\0');
-					const char *p = &jkBuf_[FindHttpBody(&jkBuf_[0])];
+				} else if (ret == -2 && currentJK_ == currentJKToGet_ && !jkBuf_.empty()) {
+					jkBuf_.back() = '\0';
+					const char *p = jkBuf_.data();
 					std::cmatch mMs, mMsPort, mThreadID;
 					if (std::regex_search(p, mMs, reMs) &&
 					    std::regex_search(p, mMsPort, reMsPort) &&
@@ -2432,12 +2423,12 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					    strcmp(jkLeaveThreadID_, mThreadID[1].str().c_str()))
 					{
 						// コメントサーバに接続
-						static const char szRequestTemplate[] = "<thread res_from=\"-10\" version=\"20061206\" thread=\"%.15s\" />";
-						char szRequest[_countof(szRequestTemplate) + 16];
-						sprintf_s(szRequest, szRequestTemplate, mThreadID[1].str().c_str());
+						static const char szRequestTemplate[] = "%.15s %d <thread res_from=\"-10\" version=\"20061206\" thread=\"%.15s\" />";
+						char szRequest[_countof(szRequestTemplate) + 64];
+						sprintf_s(szRequest, szRequestTemplate,
+						          mMs[1].str().c_str(), static_cast<unsigned short>(atoi(mMsPort[1].first)), mThreadID[1].str().c_str());
 						jkLeaveThreadID_[0] = '\0';
-						// '\0'まで送る
-						if (jkSocket_.Send(hwnd, WMS_JK, mMs[1].str().c_str(), static_cast<unsigned short>(atoi(mMsPort[1].first)), szRequest, static_cast<int>(strlen(szRequest) + 1), true)) {
+						if (jkStream_.Send(hwnd, WMS_JK, 'S', szRequest)) {
 							bConnectedToCommentServer_ = true;
 							jkBuf_.clear();
 							// コメント投稿のため
@@ -2460,33 +2451,17 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			} else {
 				// 受信中
 				if (bConnectedToCommentServer_) {
-					jkBuf_.push_back('\0');
-					const char *p = &jkBuf_[0];
-					const char *tail = &jkBuf_[jkBuf_.size() - 1];
 					bool bRead = false;
-					bool bCarried = false;
-					while (p < tail) {
-						// ログで特別な意味をもつため改行文字は数値文字参照に置換
-						int len, rplLen;
-						char rpl[CHAT_TAG_MAX + 16];
-						for (len = 0, rplLen = 0; p[len]; ++len) {
-							if (rplLen < CHAT_TAG_MAX) {
-								if (p[len] == '\n' || p[len] == '\r') {
-									rplLen += sprintf_s(&rpl[rplLen], 16, "&#%d;", p[len]);
-								} else {
-									rpl[rplLen++] = p[len];
-								}
-							}
-						}
-						rpl[rplLen] = '\0';
-
-						if (&p[len] == tail) {
-							// タグの途中でパケット分割される場合があるため繰り越し
-							jkBuf_.pop_back();
-							jkBuf_.erase(jkBuf_.begin(), jkBuf_.end() - len);
-							bCarried = true;
+					for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
+						std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
+						if (itEnd == jkBuf_.end()) {
 							break;
 						}
+						*itEnd = '\0';
+						if (itEnd - it >= CHAT_TAG_MAX) {
+							*(it + CHAT_TAG_MAX - 1) = '\0';
+						}
+						const char *rpl = &*it;
 						// 指定ファイル再生中は混じると鬱陶しいので表示しない。後退指定はある程度反映
 						if (ProcessChatTag(rpl, !bSpecFile_, min(max(-forwardOffset_, 0), 30000))) {
 							dprintf(TEXT("#")); // DEBUG
@@ -2514,15 +2489,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						}
 #ifdef _DEBUG
 						TCHAR debug[512];
-						int debugLen = MultiByteToWideChar(CP_UTF8, 0, p, -1, debug, _countof(debug) - 1);
+						int debugLen = MultiByteToWideChar(CP_UTF8, 0, rpl, -1, debug, _countof(debug) - 1);
 						debug[debugLen] = TEXT('\0');
 						dprintf(TEXT("%s\n"), debug); // DEBUG
 #endif
-						p += len + 1;
+						it = itEnd + 1;
 					}
-					if (!bCarried) {
-						jkBuf_.clear();
-					}
+					jkBuf_.clear();
 					if (bRead && bDisplayLogList_) {
 						SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
 					}
@@ -2538,13 +2511,12 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			static const std::regex reServerTime("^<thread[^>]*? server_time=\"(\\d+)\"");
 			static const std::regex reMailIsValid("[0-9A-Za-z #]*");
 
-			int ret = postSocket_.ProcessRecv(wParam, lParam, &postBuf_);
+			int ret = postStream_.ProcessRecv(postBuf_);
 			if (ret == -2) {
 				// 切断
 				postBuf_.push_back('\0');
 				std::cmatch mPostkey, mThread, mTicket, mServerTime;
-				const char *p = &postBuf_[FindHttpBody(&postBuf_[0])];
-				if (std::regex_search(p, mPostkey, rePostkey) &&
+				if (std::regex_search(postBuf_.data(), mPostkey, rePostkey) &&
 				    std::regex_search(commentServerResponse_, mThread, reThread) &&
 				    std::regex_search(commentServerResponse_, mTicket, reTicket) &&
 				    std::regex_search(commentServerResponse_, mServerTime, reServerTime) &&
@@ -2575,8 +2547,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						char szRequest[_countof(szRequestTemplate) + _countof(u8commEnc) + _countof(u8mail) + _countof(getflvUserID_) + 256];
 						sprintf_s(szRequest, szRequestTemplate, mThread[1].str().c_str(), mTicket[1].str().c_str(), vpos, mPostkey[1].str().c_str(),
 						          u8mail, s_.bAnonymity ? " 184" : "", getflvUserID_, (int)bGetflvIsPremium_, u8commEnc);
-						// '\0'まで送る
-						if (jkSocket_.Send(hwnd, WMS_JK, nullptr, 0, szRequest, static_cast<int>(strlen(szRequest) + 1), true)) {
+						if (jkStream_.Send(hwnd, WMS_JK, '+', szRequest)) {
 							lastPostTick_ = GetTickCount();
 							GetPostComboBoxText(lastPostComm_, _countof(lastPostComm_));
 							// アンドゥできるように選択削除で消す
@@ -2629,13 +2600,12 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				} else {
 					// ポストキー取得開始
 					char szGet[_countof(cookie_) + 256];
-					sprintf_s(szGet, "GET /api/v2/getpostkey?thread=%.15s&block_no=%d HTTP/1.1\r\n", mThread[1].str().c_str(), (lastChatNo_ + 1) / 100);
-					AppendHttpHeader(szGet, "Host: ", s_.jkHostName.c_str(), "\r\n");
+					sprintf_s(szGet, "%.15s %d %s", mThread[1].str().c_str(), (lastChatNo_ + 1) / 100, s_.jkHostName.c_str());
 					if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-						AppendHttpHeader(szGet, "Cookie: ", cookie_, "\r\n");
+						strcat_s(szGet, " ");
+						strcat_s(szGet, cookie_);
 					}
-					AppendHttpHeader(szGet, "Connection: ", "close", "\r\n\r\n");
-					if (postSocket_.Send(hwnd, WMS_POST, s_.jkHostName.c_str(), 80, szGet)) {
+					if (postStream_.Send(hwnd, WMS_POST, 'P', szGet)) {
 						postBuf_.clear();
 					}
 				}

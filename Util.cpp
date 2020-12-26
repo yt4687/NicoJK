@@ -102,12 +102,6 @@ DWORD GetLongModuleFileName(HMODULE hModule, LPTSTR lpFileName, DWORD nSize)
 	return 0;
 }
 
-size_t FindHttpBody(const char *str)
-{
-	const char *p = strstr(str, "\r\n\r\n");
-	return p ? p + 4 - str : strlen(str);
-}
-
 bool HasToken(const char *str, const char *substr)
 {
 	size_t len = strlen(substr);
@@ -158,7 +152,11 @@ void EncodeEntityReference(const char *src, char *dest, size_t destSize)
 	dest[0] = '\0';
 	for (; *src; ++src) {
 		char s[2] = {*src};
-		const char *p = *s=='<' ? "&lt;" : *s=='>' ? "&gt;" : *s=='&' ? "&amp;" : s;
+		const char *p = *s == '<' ? "&lt;" :
+		                *s == '>' ? "&gt;" :
+		                *s == '&' ? "&amp;" :
+		                *s == '\n' ? "&#10;" :
+		                *s == '\r' ? "&#13;" : s;
 		if (strlen(p) >= destSize) {
 			break;
 		}
@@ -404,44 +402,49 @@ bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, size_t
 	sa.bInheritHandle = TRUE;
 	HANDLE hReadPipe, hWritePipe;
 	if (CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
-		{
-			STARTUPINFO si = {};
-			si.cb = sizeof(si);
-			si.dwFlags = STARTF_USESTDHANDLES;
-			si.hStdOutput = hWritePipe;
-			PROCESS_INFORMATION pi;
-			std::vector<TCHAR> commandLineBuf(commandLine, commandLine + _tcslen(commandLine) + 1);
-			if (CreateProcess(nullptr, commandLineBuf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
-				size_t bufCount = 0;
-				bool bBreak = false;
-				bRet = true;
-				while (!bBreak) {
-					timeout -= 100;
-					if (WaitForSingleObject(pi.hProcess, 100) == WAIT_OBJECT_0) {
-						bBreak = true;
-					} else if (timeout <= 0) {
+		STARTUPINFO si = {};
+		si.cb = sizeof(si);
+		si.dwFlags = STARTF_USESTDHANDLES;
+		si.hStdOutput = hWritePipe;
+		// 標準エラー出力は捨てる
+		si.hStdError = CreateFile(TEXT("nul"), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		PROCESS_INFORMATION pi;
+		std::vector<TCHAR> commandLineBuf(commandLine, commandLine + _tcslen(commandLine) + 1);
+		if (CreateProcess(nullptr, commandLineBuf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, currentDir, &si, &pi)) {
+			bRet = true;
+		}
+		if (si.hStdError != INVALID_HANDLE_VALUE) {
+			CloseHandle(si.hStdError);
+		}
+		CloseHandle(hWritePipe);
+		if (bRet) {
+			size_t bufCount = 0;
+			bool bBreak = false;
+			while (!bBreak) {
+				timeout -= 100;
+				if (WaitForSingleObject(pi.hProcess, 100) == WAIT_OBJECT_0) {
+					bBreak = true;
+				} else if (timeout <= 0) {
+					bBreak = true;
+					bRet = false;
+				}
+				DWORD avail;
+				if (PeekNamedPipe(hReadPipe, nullptr, 0, nullptr, &avail, nullptr) && avail != 0) {
+					if (bufCount + avail >= bufSize) {
 						bBreak = true;
 						bRet = false;
-					}
-					DWORD avail;
-					if (PeekNamedPipe(hReadPipe, nullptr, 0, nullptr, &avail, nullptr) && avail != 0) {
-						if (bufCount + avail >= bufSize) {
-							bBreak = true;
-							bRet = false;
-						} else {
-							DWORD read;
-							if (ReadFile(hReadPipe, &buf[bufCount], avail, &read, nullptr)) {
-								bufCount += read;
-							}
+					} else {
+						DWORD read;
+						if (ReadFile(hReadPipe, &buf[bufCount], avail, &read, nullptr)) {
+							bufCount += read;
 						}
 					}
 				}
-				buf[bufCount] = '\0';
-				CloseHandle(pi.hThread);
-				CloseHandle(pi.hProcess);
 			}
+			buf[bufCount] = '\0';
+			CloseHandle(pi.hThread);
+			CloseHandle(pi.hProcess);
 		}
-		CloseHandle(hWritePipe);
 		CloseHandle(hReadPipe);
 	}
 	return bRet;

@@ -20,7 +20,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <WindowsX.h>
-#include <WinSock2.h>
 #include <MMSystem.h>
 #include <objbase.h>
 #include <GdiPlus.h>
@@ -36,7 +35,6 @@
 #include <ShellAPI.h>
 #include <process.h>
 
-#pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "dwmapi.lib")
