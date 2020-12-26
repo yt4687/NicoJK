@@ -53,8 +53,6 @@ private:
 		tstring logfileDrivers;
 		tstring nonTunerDrivers;
 		tstring logfileFolder;
-		std::string jkHostName;
-		bool sendCookieToCustomJKHost;
 		tstring execGetCookie;
 		tstring execGetV10Key;
 		tstring mailDecorations;
@@ -79,7 +77,8 @@ private:
 	struct FORCE_ELEM {
 		int jkID;
 		int force;
-		TCHAR name[64];
+		tstring name;
+		std::string chatStreamID;
 	};
 	struct LOG_ELEM {
 		SYSTEMTIME st;
@@ -104,6 +103,7 @@ private:
 	static unsigned int __stdcall SyncThread(void *pParam);
 	void LoadFromIni();
 	void SaveToIni();
+	void LoadForceListFromIni();
 	void LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplList);
 	void SaveRplListToIni(LPCTSTR section, const std::vector<RPL_ELEM> &rplList, bool bClearSection = true);
 	HWND GetFullscreenWindow();
@@ -159,22 +159,10 @@ private:
 	int forwardOffsetDelta_;
 
 	// 通信用
-	CJKStream channelStream_;
 	CJKStream jkStream_;
-	CJKStream postStream_;
-	std::vector<char> channelBuf_;
 	std::vector<char> jkBuf_;
-	std::vector<char> postBuf_;
 	int currentJKToGet_;
 	int currentJK_;
-	char jkLeaveThreadID_[16];
-	int jkLeaveThreadCheck_;
-	bool bConnectedToCommentServer_;
-	char commentServerResponse_[CHAT_TAG_MAX];
-	DWORD commentServerResponseTick_;
-	char getflvUserID_[16];
-	bool bGetflvIsPremium_;
-	int lastChatNo_;
 	DWORD lastPostTick_;
 	TCHAR lastPostComm_[POST_COMMENT_MAX];
 

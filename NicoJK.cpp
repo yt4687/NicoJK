@@ -32,16 +32,12 @@ inline void dprintf_real( const _TCHAR * fmt, ... )
 #endif
 
 // 通信用
-#define WMS_FORCE (WM_APP + 101)
 #define WMS_JK (WM_APP + 102)
-#define WMS_POST (WM_APP + 103)
 
 #define WM_RESET_STREAM (WM_APP + 105)
 #define WM_UPDATE_LIST (WM_APP + 106)
 #define WM_SET_ZORDER (WM_APP + 107)
 #define WM_POST_COMMENT (WM_APP + 108)
-
-#define DEFAULT_JK_HOST_NAME "jk.nicovideo.jp"
 
 enum {
 	TIMER_UPDATE = 1,
@@ -116,11 +112,6 @@ CNicoJK::CNicoJK()
 	, forwardOffsetDelta_(0)
 	, currentJKToGet_(-1)
 	, currentJK_(-1)
-	, jkLeaveThreadCheck_(0)
-	, bConnectedToCommentServer_(false)
-	, commentServerResponseTick_(0)
-	, bGetflvIsPremium_(false)
-	, lastChatNo_(0)
 	, lastPostTick_(0)
 	, bRecording_(false)
 	, bUsingLogfileDriver_(false)
@@ -139,9 +130,6 @@ CNicoJK::CNicoJK()
 	, dropFileTimeout_(0)
 {
 	cookie_[0] = '\0';
-	jkLeaveThreadID_[0] = '\0';
-	commentServerResponse_[0] = '\0';
-	getflvUserID_[0] = '\0';
 	lastPostComm_[0] = TEXT('\0');
 	readLogText_[0] = '\0';
 	SETTINGS s = {};
@@ -294,8 +282,9 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 	if (bEnabled) {
 		if ((!s_.bUsePanel || hPanel_) && !hForce_) {
 			LoadFromIni();
-			// ネットワーク未接続でもログフォルダにあるチャンネルを勢い窓に表示できるようにするため
-			forceList_.clear();
+			LoadForceListFromIni();
+
+			// ログフォルダにあるチャンネルは勢い窓に表示する
 			if (!s_.logfileFolder.empty()) {
 				EnumFindFile((s_.logfileFolder + TEXT("\\jk*")).c_str(), [this](const WIN32_FIND_DATA &fd) {
 					FORCE_ELEM e;
@@ -310,12 +299,14 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 						if (p && p->jkID == f.jkID) {
 							f.name = p->name;
 						}
-						_tcsncpy_s(e.name, f.name, _countof(e.name) - 2);
-						// 今後チャンネル移動などあるかもしれないので確実ではないことを示す"?"
-						_tcscat_s(e.name, TEXT("?"));
+						e.name = f.name;
 						e.force = 0;
-						forceList_.insert(std::lower_bound(forceList_.begin(), forceList_.end(), e,
-							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; }), e);
+						// まだなければ追加
+						std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
+							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
+						if (it == forceList_.end() || it->jkID != e.jkID) {
+							forceList_.insert(it, e);
+						}
 					}
 				});
 			}
@@ -466,17 +457,6 @@ void CNicoJK::LoadFromIni()
 	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
 	                         val, _countof(val));
 	s_.nonTunerDrivers = val;
-	GetBufferedProfileString(buf.data(), TEXT("customJKHostName"), TEXT(DEFAULT_JK_HOST_NAME), val, _countof(val));
-	s_.jkHostName.clear();
-	for (LPCTSTR p = val; *p; ++p) {
-		if ((TEXT('0') <= *p && *p <= TEXT('9')) ||
-		    (TEXT('A') <= *p && *p <= TEXT('Z')) ||
-		    (TEXT('a') <= *p && *p <= TEXT('z')) ||
-		    *p == TEXT('.') || *p == TEXT('_') || *p == TEXT('-')) {
-			s_.jkHostName.push_back(static_cast<char>(*p));
-		}
-	}
-	s_.sendCookieToCustomJKHost = GetBufferedProfileInt(buf.data(), TEXT("sendCookieToCustomJKHost"), 0) != 0;
 	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
 	s_.execGetCookie = val;
 	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
@@ -573,6 +553,74 @@ void CNicoJK::SaveToIni()
 	WritePrivateProfileInt(TEXT("Window"), TEXT("CommentOpacity"), s_.commentOpacity, iniFileName_.c_str());
 	WritePrivateProfileInt(TEXT("Window"), TEXT("HeaderMask"), s_.headerMask, iniFileName_.c_str());
 	WritePrivateProfileInt(TEXT("Window"), TEXT("SetRelative"), s_.bSetRelative, iniFileName_.c_str());
+}
+
+void CNicoJK::LoadForceListFromIni()
+{
+	// chatStreamIDをもつチャンネルのみ追加
+	forceList_.clear();
+	for (size_t i = 0; i < _countof(DEFAULT_JKID_NAME_TABLE); ++i) {
+		if (DEFAULT_JKID_NAME_TABLE[i].chatStreamID) {
+			FORCE_ELEM e;
+			e.jkID = DEFAULT_JKID_NAME_TABLE[i].jkID;
+			e.name = DEFAULT_JKID_NAME_TABLE[i].name;
+			e.chatStreamID = DEFAULT_JKID_NAME_TABLE[i].chatStreamID;
+			e.force = 0;
+			forceList_.push_back(e);
+		}
+	}
+
+	// chatStreamIDの追加の対照表をマージ
+	std::vector<TCHAR> buf = GetPrivateProfileSectionBuffer(TEXT("ChatStreams"), iniFileName_.c_str());
+	for (LPCTSTR p = buf.data(); *p; p += _tcslen(p) + 1) {
+		FORCE_ELEM e;
+		e.jkID = _tcstol(p, nullptr, 10);
+		if (e.jkID > 0) {
+			TCHAR key[16];
+			_stprintf_s(key, TEXT("%d"), e.jkID);
+			TCHAR val[SETTING_VALUE_MAX];
+			GetBufferedProfileString(buf.data(), key, TEXT("!"), val, _countof(val));
+			if (_tcscmp(val, TEXT("!"))) {
+				// とりあえず組み込みのチャンネル名を設定しておく
+				JKID_NAME_ELEM f;
+				f.jkID = e.jkID;
+				f.name = TEXT("");
+				const JKID_NAME_ELEM *q = std::lower_bound(
+					DEFAULT_JKID_NAME_TABLE, DEFAULT_JKID_NAME_TABLE + _countof(DEFAULT_JKID_NAME_TABLE), f,
+					[](const JKID_NAME_ELEM &a, const JKID_NAME_ELEM &b) { return a.jkID < b.jkID; });
+				if (q && q->jkID == f.jkID) {
+					f.name = q->name;
+				}
+				e.name = f.name;
+				for (size_t i = 0; val[i]; ++i) {
+					if ((TEXT('0') <= val[i] && val[i] <= TEXT('9')) ||
+					    (TEXT('A') <= val[i] && val[i] <= TEXT('Z')) ||
+					    (TEXT('a') <= val[i] && val[i] <= TEXT('z'))) {
+						e.chatStreamID += static_cast<char>(val[i]);
+					} else {
+						e.chatStreamID.clear();
+						TCHAR text[64];
+						_stprintf_s(text, TEXT("[ChatStreams]のキー%sの値が不正です。"), key);
+						m_pApp->AddLog(text, TVTest::LOG_TYPE_ERROR);
+						break;
+					}
+				}
+				e.force = 0;
+				// まだなければ追加
+				std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
+					[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
+				if (it == forceList_.end() || it->jkID != e.jkID) {
+					if (!e.chatStreamID.empty()) {
+						forceList_.insert(it, e);
+					}
+				} else if (e.chatStreamID.empty()) {
+					forceList_.erase(it);
+				} else {
+					*it = e;
+				}
+			}
+		}
+	}
 }
 
 void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplList)
@@ -1690,9 +1738,6 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			forwardOffset_ = 0;
 			forwardOffsetDelta_ = 0;
 			currentJKToGet_ = -1;
-			jkLeaveThreadID_[0] = '\0';
-			jkLeaveThreadCheck_ = 0;
-			commentServerResponse_[0] = '\0';
 			lastPostComm_[0] = TEXT('\0');
 			bUsingLogfileDriver_ = IsMatchDriverName(s_.logfileDrivers.c_str());
 			readLogfileTick_ = GetTickCount();
@@ -1799,12 +1844,8 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			commentWindow_.Destroy();
 
-			channelStream_.BeginClose();
 			jkStream_.BeginClose();
-			postStream_.BeginClose();
-			channelStream_.Close();
 			jkStream_.Close();
-			postStream_.Close();
 
 			if (hSyncThread_) {
 				bQuitSyncThread_ = true;
@@ -2095,39 +2136,23 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		switch (wParam) {
 		case TIMER_UPDATE:
 			if (!bDisplayLogList_ && IsWindowVisible(hwnd)) {
-				// 勢いを更新する
-				char szGet[_countof(cookie_) + 256];
-				strcpy_s(szGet, s_.jkHostName.c_str());
-				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-					strcat_s(szGet, " ");
-					strcat_s(szGet, cookie_);
-				}
-				// 前回の通信が完了していなくてもfalseを返すだけ。気にせず呼ぶ
-				if (channelStream_.Send(hwnd, WMS_FORCE, 'H', szGet)) {
-					channelBuf_.clear();
-				}
+				// TODO: 勢いを更新する
+				SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
 			}
 			break;
 		case TIMER_JK_WATCHDOG:
 			SetTimer(hwnd, TIMER_JK_WATCHDOG, max(JK_WATCHDOG_INTERVAL, 10000), nullptr);
-			if (jkLeaveThreadCheck_ > 0 && --jkLeaveThreadCheck_ == 0) {
-				OutputMessageLog(TEXT("leave_threadタグにより切断します。"));
-				jkStream_.Shutdown();
-				SetTimer(hwnd, TIMER_JK_WATCHDOG, 1000, nullptr);
-			}
 			if (currentJKToGet_ >= 0 && !bUsingLogfileDriver_) {
-				// パーマリンクを取得
-				char szGet[_countof(cookie_) + 256];
-				sprintf_s(szGet, "jk%d %s", currentJKToGet_, s_.jkHostName.c_str());
-				if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-					strcat_s(szGet, " ");
-					strcat_s(szGet, cookie_);
-				}
-				if (jkStream_.Send(hwnd, WMS_JK, 'F', szGet)) {
-					currentJK_ = currentJKToGet_;
-					bConnectedToCommentServer_ = false;
-					jkBuf_.clear();
-					OutputMessageLog(TEXT("パーマリンクに接続開始しました。"));
+				// chatStreamIDに変換
+				FORCE_ELEM e;
+				e.jkID = currentJKToGet_;
+				std::vector<FORCE_ELEM>::const_iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
+					[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
+				if (it != forceList_.end() && it->jkID == e.jkID && !it->chatStreamID.empty()) {
+					if (jkStream_.Send(hwnd, WMS_JK, 'L', (it->chatStreamID + " " + cookie_).c_str())) {
+						currentJK_ = currentJKToGet_;
+						OutputMessageLog(TEXT("コメントサーバに接続開始しました。"));
+					}
 				}
 			}
 			break;
@@ -2340,8 +2365,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			} else {
 				// 勢いリスト表示中
 				for (auto it = forceList_.cbegin(); it != forceList_.end(); ++it) {
-					TCHAR text[_countof(it->name) + 64];
-					_stprintf_s(text, TEXT("jk%d (%s) 勢い：%d"), it->jkID, it->name, it->force);
+					TCHAR text[256];
+					_stprintf_s(text, TEXT("jk%d (%.63s-%.63S) 勢い：%d"),
+					            it->jkID, it->name.c_str(), it->chatStreamID.c_str(), it->force);
 					ListBox_AddString(hList, text);
 					if (it->jkID == currentJKToGet_) {
 						ListBox_SetCurSel(hList, ListBox_GetCount(hList) - 1);
@@ -2354,103 +2380,22 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			InvalidateRect(hList, nullptr, FALSE);
 		}
 		return TRUE;
-	case WMS_FORCE:
-		{
-			static const std::regex reChannel("<((?:bs_)?channel)>([^]*?)</\\1>");
-			static const std::regex reChannelRadio("<((?:bs_|radio_)?channel)>([^]*?)</\\1>");
-			static const std::regex reVideo("<video>jk(\\d+)</video>");
-			static const std::regex reForce("<force>(\\d+)</force>");
-			static const std::regex reName("<name>([^<]*)</name>");
-
-			int ret = channelStream_.ProcessRecv(channelBuf_);
-			if (ret == -2) {
-				// 切断
-				channelBuf_.push_back('\0');
-				bool bCleared = false;
-				std::cmatch m, mVideo, mForce, mName;
-				const char *p = channelBuf_.data();
-				const char *pLast = &p[strlen(p)];
-				for (; std::regex_search(p, pLast, m, s_.bShowRadio ? reChannelRadio : reChannel); p = m[0].second) {
-					if (std::regex_search(m[2].first, m[2].second, mVideo, reVideo) &&
-					    std::regex_search(m[2].first, m[2].second, mForce, reForce) &&
-					    std::regex_search(m[2].first, m[2].second, mName, reName))
-					{
-						FORCE_ELEM e;
-						e.jkID = atoi(mVideo[1].first);
-						e.force = atoi(mForce[1].first);
-						int len = MultiByteToWideChar(CP_UTF8, 0, mName[1].first, static_cast<int>(mName[1].length()), e.name, _countof(e.name) - 1);
-						e.name[len] = TEXT('\0');
-						DecodeEntityReference(e.name);
-						if (!bCleared) {
-							forceList_.clear();
-							bCleared = true;
-						}
-						forceList_.push_back(e);
-					}
-				}
-				SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
-			}
-		}
-		return TRUE;
 	case WMS_JK:
 		{
-			static const std::regex reMs("^(?=.*?(?:^|&)done=true(?:&|$)).*?(?:^|&)ms=(\\d+\\.\\d+\\.\\d+\\.\\d+)(?:&|$)");
-			static const std::regex reMsPort("(?:^|&)ms_port=(\\d+)(?:&|$)");
-			static const std::regex reThreadID("(?:^|&)thread_id=(\\d+)(?:&|$)");
-			static const std::regex reUserID("(?:^|&)user_id=(\\d+)(?:&|$)");
-			static const std::regex reIsPremium("(?:^|&)is_premium=1(?:&|$)");
-			static const std::regex reNickname("(?:^|&)nickname=([0-9A-Za-z]*)");
-			static const std::regex reChatNo("^<chat(?= )[^>]*? no=\"(\\d+)\"");
 			static const std::regex reChatResult("^<chat_result(?= ).*? status=\"(?!0\")(\\d+)\"");
-			static const std::regex reLeaveThreadID("^<leave_thread(?= )(?=.*? reason=\"2\").*? thread=\"(\\d+)\"");
+			static const std::regex reXRoom("^<x_room ");
+			static const std::regex reNickname("^<x_room(?= )[^>]*? nickname=\"(.*?)\"");
+			static const std::regex reIsLoggedIn("^<x_room(?= )[^>]*? is_logged_in=\"1\"");
 
+			jkBuf_.clear();
 			int ret = jkStream_.ProcessRecv(jkBuf_);
 			if (ret < 0) {
 				// 切断
-				if (bConnectedToCommentServer_) {
-					bConnectedToCommentServer_ = false;
-					commentServerResponse_[0] = '\0';
-					jkLeaveThreadCheck_ = 0;
-					OutputMessageLog(TEXT("コメントサーバとの通信を切断しました。"));
-					WriteToLogfile(-1);
-				} else if (ret == -2 && currentJK_ == currentJKToGet_ && !jkBuf_.empty()) {
-					jkBuf_.back() = '\0';
-					const char *p = jkBuf_.data();
-					std::cmatch mMs, mMsPort, mThreadID;
-					if (std::regex_search(p, mMs, reMs) &&
-					    std::regex_search(p, mMsPort, reMsPort) &&
-					    std::regex_search(p, mThreadID, reThreadID) &&
-					    strcmp(jkLeaveThreadID_, mThreadID[1].str().c_str()))
-					{
-						// コメントサーバに接続
-						static const char szRequestTemplate[] = "%.15s %d <thread res_from=\"-10\" version=\"20061206\" thread=\"%.15s\" />";
-						char szRequest[_countof(szRequestTemplate) + 64];
-						sprintf_s(szRequest, szRequestTemplate,
-						          mMs[1].str().c_str(), static_cast<unsigned short>(atoi(mMsPort[1].first)), mThreadID[1].str().c_str());
-						jkLeaveThreadID_[0] = '\0';
-						if (jkStream_.Send(hwnd, WMS_JK, 'S', szRequest)) {
-							bConnectedToCommentServer_ = true;
-							jkBuf_.clear();
-							// コメント投稿のため
-							bGetflvIsPremium_ = std::regex_search(p, reIsPremium);
-							getflvUserID_[0] = '\0';
-							std::cmatch m;
-							if (std::regex_search(p, m, reUserID)) {
-								strncpy_s(getflvUserID_, m[1].str().c_str(), _TRUNCATE);
-							}
-							if (getflvUserID_[0] && std::regex_search(p, m, reNickname)) {
-								TCHAR text[128];
-								swprintf_s(text, TEXT("コメントサーバに接続開始しました(login=%.16S)。"), m[1].str().c_str());
-								OutputMessageLog(text);
-							} else {
-								OutputMessageLog(TEXT("コメントサーバに接続開始しました。"));
-							}
-						}
-					}
-				}
+				OutputMessageLog(TEXT("コメントサーバとの通信を切断しました。"));
+				WriteToLogfile(-1);
 			} else {
 				// 受信中
-				if (bConnectedToCommentServer_) {
+				{
 					bool bRead = false;
 					for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
 						std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
@@ -2469,23 +2414,24 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							bRead = true;
 						}
 						std::cmatch m;
-						if (std::regex_search(rpl, m, reChatNo)) {
-							// コメント投稿のために最新コメントのコメ番を記録
-							lastChatNo_ = atoi(m[1].first);
-						} else if (!commentServerResponse_[0] && !strncmp(rpl, "<thread ", 8)) {
-							// コメント投稿のために接続応答を記録。これが空文字列でない間は投稿可能
-							strncpy_s(commentServerResponse_, rpl, _TRUNCATE);
-							commentServerResponseTick_ = GetTickCount();
-						} else if (std::regex_search(rpl, m, reChatResult)) {
+						if (std::regex_search(rpl, m, reChatResult)) {
 							// コメント投稿失敗の応答を取得した
 							TCHAR text[64];
 							_stprintf_s(text, TEXT("Error:コメント投稿に失敗しました(status=%d)。"), atoi(m[1].first));
 							OutputMessageLog(text);
-						} else if (std::regex_search(rpl, m, reLeaveThreadID)) {
-							// leave_thread reason="2"(≒4時リセット?)により切断されようとしている
-							strncpy_s(jkLeaveThreadID_, m[1].str().c_str(), _TRUNCATE);
-							// たまにサーバから切断されない場合があるため
-							jkLeaveThreadCheck_ = 2;
+						} else if (std::regex_search(rpl, reXRoom)) {
+							// 接続情報を取得した
+							TCHAR nickname[64];
+							nickname[0] = TEXT('\0');
+							if (std::regex_search(rpl, m, reNickname)) {
+								int len = MultiByteToWideChar(CP_UTF8, 0, m[1].first, static_cast<int>(m[1].length()), nickname, _countof(nickname) - 1);
+								nickname[len] = TEXT('\0');
+								DecodeEntityReference(nickname);
+							}
+							bool isLoggedIn = std::regex_search(rpl, reIsLoggedIn);
+							TCHAR text[128];
+							_stprintf_s(text, TEXT("コメントサーバに接続しました(%s%s)。"), isLoggedIn ? TEXT("login=") : TEXT(""), nickname);
+							OutputMessageLog(text);
 						}
 #ifdef _DEBUG
 						TCHAR debug[512];
@@ -2495,73 +2441,10 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 #endif
 						it = itEnd + 1;
 					}
-					jkBuf_.clear();
 					if (bRead && bDisplayLogList_) {
 						SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
 					}
 				}
-			}
-		}
-		return TRUE;
-	case WMS_POST:
-		{
-			static const std::regex rePostkey("postkey=([0-9A-Za-z\\-_.]+)");
-			static const std::regex reThread("^<thread[^>]*? thread=\"(\\d+)\"");
-			static const std::regex reTicket("^<thread[^>]*? ticket=\"(.+?)\"");
-			static const std::regex reServerTime("^<thread[^>]*? server_time=\"(\\d+)\"");
-			static const std::regex reMailIsValid("[0-9A-Za-z #]*");
-
-			int ret = postStream_.ProcessRecv(postBuf_);
-			if (ret == -2) {
-				// 切断
-				postBuf_.push_back('\0');
-				std::cmatch mPostkey, mThread, mTicket, mServerTime;
-				if (std::regex_search(postBuf_.data(), mPostkey, rePostkey) &&
-				    std::regex_search(commentServerResponse_, mThread, reThread) &&
-				    std::regex_search(commentServerResponse_, mTicket, reTicket) &&
-				    std::regex_search(commentServerResponse_, mServerTime, reServerTime) &&
-				    getflvUserID_[0] && GetTickCount() - lastPostTick_ >= POST_COMMENT_INTERVAL)
-				{
-					// コメント欄を文字コード変換
-					TCHAR comm[POST_COMMENT_MAX], mail[64];
-					GetPostComboBoxText(comm, _countof(comm), mail, _countof(mail));
-					// Tab文字orレコードセパレータ->改行
-					for (LPTSTR q = comm; *q; ++q) {
-						if (*q == TEXT('\t') || *q == TEXT('\x1e')) *q = TEXT('\n');
-					}
-					char u8comm[_countof(comm) * 3];
-					char u8mail[_countof(mail) * 3];
-					char u8commEnc[_countof(comm) * 5];
-					int len = WideCharToMultiByte(CP_UTF8, 0, comm, -1, u8comm, _countof(u8comm) - 1, nullptr, nullptr);
-					u8comm[len] = '\0';
-					len = WideCharToMultiByte(CP_UTF8, 0, mail, -1, u8mail, _countof(u8mail) - 1, nullptr, nullptr);
-					u8mail[len] = '\0';
-					EncodeEntityReference(u8comm, u8commEnc, _countof(u8commEnc));
-					// vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
-					int vpos = (int)((LONGLONG)strtoul(mServerTime[1].first, nullptr, 10) - strtoul(mThread[1].first, nullptr, 10)) * 100 +
-					           (int)(GetTickCount() - commentServerResponseTick_) / 10;
-					if (std::regex_match(u8mail, reMailIsValid) && vpos >= 0) {
-						// コメント投稿
-						static const char szRequestTemplate[] =
-							"<chat thread=\"%.15s\" ticket=\"%.15s\" vpos=\"%d\" postkey=\"%.40s\" mail=\"%s%s\" user_id=\"%s\" premium=\"%d\" staff=\"0\">%s</chat>";
-						char szRequest[_countof(szRequestTemplate) + _countof(u8commEnc) + _countof(u8mail) + _countof(getflvUserID_) + 256];
-						sprintf_s(szRequest, szRequestTemplate, mThread[1].str().c_str(), mTicket[1].str().c_str(), vpos, mPostkey[1].str().c_str(),
-						          u8mail, s_.bAnonymity ? " 184" : "", getflvUserID_, (int)bGetflvIsPremium_, u8commEnc);
-						if (jkStream_.Send(hwnd, WMS_JK, '+', szRequest)) {
-							lastPostTick_ = GetTickCount();
-							GetPostComboBoxText(lastPostComm_, _countof(lastPostComm_));
-							// アンドゥできるように選択削除で消す
-							if (SendDlgItemMessage(hwnd, IDC_CB_POST, CB_SETEDITSEL, 0, MAKELPARAM(0, -1)) == TRUE) {
-								SendDlgItemMessage(hwnd, IDC_CB_POST, WM_CLEAR, 0, 0);
-							}
-#ifdef _DEBUG
-							OutputDebugStringA((std::string("##POST##") + szRequest + "\n").c_str());
-#endif
-							return TRUE;
-						}
-					}
-				}
-				OutputMessageLog(TEXT("Error:コメント投稿をキャンセルしました。"));
 			}
 		}
 		return TRUE;
@@ -2585,7 +2468,8 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				ProcessLocalPost(&comm[1]);
 				return TRUE;
 			}
-			GetPostComboBoxText(comm, _countof(comm));
+			TCHAR mail[64];
+			GetPostComboBoxText(comm, _countof(comm), mail, _countof(mail));
 			if (GetTickCount() - lastPostTick_ < POST_COMMENT_INTERVAL) {
 				OutputMessageLog(TEXT("Error:投稿間隔が短すぎます。"));
 			} else if (_tcslen(comm) >= POST_COMMENT_MAX) {
@@ -2593,21 +2477,30 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			} else if (comm[0] && !_tcscmp(comm, lastPostComm_)) {
 				OutputMessageLog(TEXT("Error:投稿コメントが前回と同じです。"));
 			} else if (comm[0]) {
-				static const std::regex reThread("^<thread[^>]*? thread=\"(\\d+)\"");
-				std::cmatch mThread;
-				if (!std::regex_search(commentServerResponse_, mThread, reThread) || !getflvUserID_[0]) {
-					OutputMessageLog(TEXT("Error:コメントサーバに接続していないかログインしていません。"));
+				TCHAR post[POST_COMMENT_MAX + 128];
+				_stprintf_s(post, TEXT("[%s%s]%s"), mail, s_.bAnonymity ? TEXT(" 184") : TEXT(""), comm);
+				size_t j = 0;
+				for (size_t i = 0; post[i]; ++i) {
+					// Tab文字or改行->レコードセパレータ
+					post[j] = post[i] == TEXT('\t') || post[i] == TEXT('\n') ? TEXT('\x1e') : post[i];
+					if (post[j] != TEXT('\r')) ++j;
+				}
+				post[j] = TEXT('\0');
+				// 文字コード変換
+				char u8post[_countof(post) * 3];
+				int len = WideCharToMultiByte(CP_UTF8, 0, post, -1, u8post, _countof(u8post) - 1, nullptr, nullptr);
+				u8post[len] = '\0';
+				// コメント投稿
+				if (jkStream_.Send(hwnd, WMS_JK, '+', u8post)) {
+					lastPostTick_ = GetTickCount();
+					GetPostComboBoxText(lastPostComm_, _countof(lastPostComm_));
+					// アンドゥできるように選択削除で消す
+					if (SendDlgItemMessage(hwnd, IDC_CB_POST, CB_SETEDITSEL, 0, MAKELPARAM(0, -1)) == TRUE) {
+						SendDlgItemMessage(hwnd, IDC_CB_POST, WM_CLEAR, 0, 0);
+					}
+					dprintf(TEXT("##POST##%s\n"), post); // DEBUG
 				} else {
-					// ポストキー取得開始
-					char szGet[_countof(cookie_) + 256];
-					sprintf_s(szGet, "%.15s %d %s", mThread[1].str().c_str(), (lastChatNo_ + 1) / 100, s_.jkHostName.c_str());
-					if (s_.sendCookieToCustomJKHost || s_.jkHostName == DEFAULT_JK_HOST_NAME) {
-						strcat_s(szGet, " ");
-						strcat_s(szGet, cookie_);
-					}
-					if (postStream_.Send(hwnd, WMS_POST, 'P', szGet)) {
-						postBuf_.clear();
-					}
+					OutputMessageLog(TEXT("Error:コメントサーバに接続していません。"));
 				}
 			}
 		}

@@ -146,26 +146,6 @@ void DecodeEntityReference(TCHAR *str)
 	*p = TEXT('\0');
 }
 
-void EncodeEntityReference(const char *src, char *dest, size_t destSize)
-{
-	// 切り捨てを防ぐには'&'に対して5倍のバッファを見積もる
-	dest[0] = '\0';
-	for (; *src; ++src) {
-		char s[2] = {*src};
-		const char *p = *s == '<' ? "&lt;" :
-		                *s == '>' ? "&gt;" :
-		                *s == '&' ? "&amp;" :
-		                *s == '\n' ? "&#10;" :
-		                *s == '\r' ? "&#13;" : s;
-		if (strlen(p) >= destSize) {
-			break;
-		}
-		strcpy_s(dest, destSize, p);
-		dest += strlen(p);
-		destSize -= strlen(p);
-	}
-}
-
 COLORREF GetColor(const char *command)
 {
 	static const std::regex re("(?:^| )#([0-9A-Fa-f]{6})(?: |$)");

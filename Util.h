@@ -9,7 +9,6 @@ BOOL WritePrivateProfileInt(LPCTSTR lpAppName, LPCTSTR lpKeyName, int value, LPC
 DWORD GetLongModuleFileName(HMODULE hModule, LPTSTR lpFileName, DWORD nSize);
 bool HasToken(const char *str, const char *substr);
 void DecodeEntityReference(TCHAR *str);
-void EncodeEntityReference(const char *src, char *dest, size_t destSize);
 COLORREF GetColor(const char *command);
 bool GetChatDate(unsigned int *tm, const char *tag);
 void UnixTimeToFileTime(unsigned int tm, FILETIME *pft);

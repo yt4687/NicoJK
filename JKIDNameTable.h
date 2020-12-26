@@ -1,18 +1,19 @@
 ﻿struct JKID_NAME_ELEM {
 	int jkID;
 	LPCTSTR name;
+	const char *chatStreamID;
 };
 
 static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	// ニコニコ実況チャンネルリスト(2013-01-02時点)(jkIDでソート必須)
-	{   1, TEXT("NHK 総合") },
-	{   2, TEXT("Eテレ") },
-	{   4, TEXT("日本テレビ") },
-	{   5, TEXT("テレビ朝日") },
-	{   6, TEXT("TBS テレビ") },
-	{   7, TEXT("テレビ東京") },
-	{   8, TEXT("フジテレビ") },
-	{   9, TEXT("TOKYO MX") },
+	{   1, TEXT("NHK 総合"), "ch2646436" },
+	{   2, TEXT("Eテレ"), "ch2646437" },
+	{   4, TEXT("日本テレビ"), "ch2646438" },
+	{   5, TEXT("テレビ朝日"), "ch2646439" },
+	{   6, TEXT("TBS テレビ"), "ch2646440" },
+	{   7, TEXT("テレビ東京"), "ch2646441" },
+	{   8, TEXT("フジテレビ"), "ch2646442" },
+	{   9, TEXT("TOKYO MX"), "ch2646485" },
 	{  10, TEXT("テレ玉") },
 	{  11, TEXT("tvk") },
 	{  12, TEXT("チバテレビ") },
@@ -29,7 +30,7 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{ 200, TEXT("スターチャンネル1") },
 	{ 201, TEXT("スターチャンネル2") },
 	{ 202, TEXT("スターチャンネル3") },
-	{ 211, TEXT("BSイレブン") },
+	{ 211, TEXT("BSイレブン"), "ch2646846" },
 	{ 222, TEXT("TwellV") },
 	{ 231, TEXT("放送大学") },
 	{ 234, TEXT("BSグリーンチャンネル") },
