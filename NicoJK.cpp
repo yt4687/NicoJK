@@ -432,7 +432,7 @@ void CNicoJK::LoadFromIni()
 	s_.hideForceWindow		= GetBufferedProfileInt(buf.data(), TEXT("hideForceWindow"), 0);
 	s_.forceFontSize		= GetBufferedProfileInt(buf.data(), TEXT("forceFontSize"), 10);
 	GetBufferedProfileString(buf.data(), TEXT("forceFontName"), TEXT("Meiryo UI"), s_.forceFontName, _countof(s_.forceFontName));
-	s_.timerInterval		= GetBufferedProfileInt(buf.data(), TEXT("timerInterval"), -5000);
+	s_.timerInterval		= GetBufferedProfileInt(buf.data(), TEXT("timerInterval"), -10000);
 	s_.halfSkipThreshold	= GetBufferedProfileInt(buf.data(), TEXT("halfSkipThreshold"), 9999);
 	s_.commentLineMargin	= GetBufferedProfileInt(buf.data(), TEXT("commentLineMargin"), 125);
 	s_.commentFontOutline	= GetBufferedProfileInt(buf.data(), TEXT("commentFontOutline"), 0);
@@ -462,7 +462,7 @@ void CNicoJK::LoadFromIni()
 	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
 	s_.execGetV10Key = val;
 	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
-	                         TEXT("[cyan big]:[shita]:[green shita small]:[orange]::"),
+	                         TEXT("[cyan]:[red]:[green small]:[orange]::"),
 	                         val, _countof(val));
 	s_.mailDecorations = val;
 	s_.bAnonymity			= GetBufferedProfileInt(buf.data(), TEXT("anonymity"), 1) != 0;
