@@ -3,27 +3,22 @@
   TVTest ニコニコ実況プラグイン
 */
 
-※※ニコニコ実況(旧API)廃止により、現在は利用できません（今後対応予定です）。
-
 ■なにこれ？
 ニコニコ実況を表示するTVTest用のプラグインです。
 
-# このプラグインはニコニコ実況サーバ(jk.nicovideo.jp)と通信します。サーバに高負
-# 荷を与えるような利用や改変をしないでください。
+# このプラグインはjkcnsl( https://github.com/xtne6f/jkcnsl )アプリを介してニコニ
+# コのテレビ実況サーバ(live2.nicovideo.jp)と非公式に通信します。サーバに高負荷を
+# 与えるような利用や改変をしないでください。
 
 
 ■使い方
-NicoJK.tvtpおよびNicoJK.iniをTVTestのPluginフォルダに入れてください。
+NicoJK.tvtpおよびNicoJK.iniをTVTestのPluginフォルダに入れてください。jkcnsl.exe
+はTVTest.exeのあるフォルダに入れてください。
 
 ログファイルへの記録機能は、NicoJK.iniのlogfileModeを1か2にして、Pluginsフォルダ
 の中に"NicoJK"というフォルダを作っておくと有効になります。ログは"NicoJK"フォルダ
 に保存されていきます。録画中に受信した実況コメントがファイル再生プラグイン(何で
 もいい)で再生中に表示されればOKです。
-
-些末なことですが勢い窓のフォントは「Meiryo UI」なので、XPやVista環境では入れてお
-く(PowerPointViewerとかについてくる)とちょっとだけいい感じです。
-Vista以降のAero環境で性能に余裕があればNicoJK.iniのtimerIntervalを-10000にすると
-描画がスムーズになります。
 
 ■設定
 NicoJK.iniを確認してください。
@@ -39,7 +34,7 @@ NicoJK.iniを確認してください。
   https://stedolan.github.io/jq/ から"jq-win32.exe"か"jq-win64.exe"をダウンロー
   ドして、"jq.exe"にリネームして上記と同様に配置
 2.ブラウザでニコニコ実況にログイン
-  FirefoxやEdgeやGoogleChromeで http://jk.nicovideo.jp/ にアクセスして各自のアカ
+  FirefoxやEdgeやGoogleChromeで https://jk.nicovideo.jp にアクセスして各自のアカ
   ウントでログイン
 3.NicoJK.iniのexecGetCookieにブラウザのプロファイルフォルダを設定
   プロファイルフォルダの場所については「firefox cookies.sqlite」や「chrome
@@ -68,20 +63,24 @@ NicoJK.iniを確認してください。
   トカットから起動したときに"sub"プロファイルが使われる
 
 ■制限
-今のところbigコマンドは解釈しません。
+今のところbigコマンドは解釈しません。投稿コマンドは実況サーバによる制限を受ける
+場合があります。
 パネルのNicoJKタブのテーマ/配色は"操作パネル"の設定に連動します。
 
 ■テスト環境
 Win7 sp1 + PT2/PT3 + ptTimer + BonDriver_ptmr.dll + TVTest 0.7.19(x86)
+※このフォークのテスト環境はWindows10 TVTest 0.10.0-dev(x64)
 
 ■配布
 http://www.rutice.net/
 古いやつは↓
 https://github.com/rutice/NicoJK/downloads
 リンクする場合は、配布ページか、ソースコードのページへお願いします。
+※このフォークの配布ページは https://github.com/xtne6f/NicoJK/releases
 
 ■ソースコード
 https://github.com/rutice/NicoJK
+※このフォークのソースコードは https://github.com/xt4ubq/NicoJK
 
 ■ログの仕様(開発者むけ)
 ルートフォルダに"jk{実況番号}"というフォルダ(jkフォルダ)を作成する。jkフォルダに
@@ -98,7 +97,7 @@ chatタグの左右に空白その他の文字を加えてはいけない(BOMも
 
 ■感謝
 過去ログ再生機能、コメント機能を実装していただいたxtne6f氏に感謝いたします。
-N/実/勢アイコンは「ふい字」(http://hp.vector.co.jp/authors/VA039499/)です。
+N/実/勢アイコンは「ふい字」( https://hp.vector.co.jp/authors/VA039499/ )です。
 
 ■更新履歴
 ChangeLog.txtを参照
