@@ -32,6 +32,7 @@ inline void dprintf_real( const _TCHAR * fmt, ... )
 #endif
 
 // 通信用
+#define WMS_FORCE (WM_APP + 101)
 #define WMS_JK (WM_APP + 102)
 
 #define WM_RESET_STREAM (WM_APP + 105)
@@ -461,6 +462,13 @@ void CNicoJK::LoadFromIni()
 	s_.execGetCookie = val;
 	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
 	s_.execGetV10Key = val;
+	GetBufferedProfileString(buf.data(), TEXT("channelsUri"), TEXT(""), val, _countof(val));
+	s_.channelsUri.clear();
+	for (size_t i = 0; val[i]; ++i) {
+		if (TEXT('!') <= val[i] && val[i] <= TEXT('~')) {
+			s_.channelsUri += static_cast<char>(val[i]);
+		}
+	}
 	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
 	                         TEXT("[cyan]:[red]:[green small]:[orange]::"),
 	                         val, _countof(val));
@@ -470,7 +478,6 @@ void CNicoJK::LoadFromIni()
 	s_.bUseTexture			= GetBufferedProfileInt(buf.data(), TEXT("useTexture"), 1) != 0;
 	s_.bUseDrawingThread	= GetBufferedProfileInt(buf.data(), TEXT("useDrawingThread"), 1) != 0;
 	s_.bSetChannel			= GetBufferedProfileInt(buf.data(), TEXT("setChannel"), 1) != 0;
-	s_.bShowRadio			= GetBufferedProfileInt(buf.data(), TEXT("showRadio"), 0) != 0;
 	s_.maxAutoReplace		= GetBufferedProfileInt(buf.data(), TEXT("maxAutoReplace"), 20);
 	GetBufferedProfileString(buf.data(), TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
 	s_.abone = val;
@@ -1844,7 +1851,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			commentWindow_.Destroy();
 
+			channelStream_.BeginClose();
 			jkStream_.BeginClose();
+			channelStream_.Close();
 			jkStream_.Close();
 
 			if (hSyncThread_) {
@@ -2136,8 +2145,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		switch (wParam) {
 		case TIMER_UPDATE:
 			if (!bDisplayLogList_ && IsWindowVisible(hwnd)) {
-				// TODO: 勢いを更新する
-				SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
+				// 勢いを更新する
+				if (!s_.channelsUri.empty() &&
+				    channelStream_.Send(hwnd, WMS_FORCE, 'G', s_.channelsUri.c_str())) {
+					channelBuf_.clear();
+				} else {
+					SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
+				}
 			}
 			break;
 		case TIMER_JK_WATCHDOG:
@@ -2378,6 +2392,47 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			// 描画を再開
 			SendMessage(hList, WM_SETREDRAW, TRUE, 0);
 			InvalidateRect(hList, nullptr, FALSE);
+		}
+		return TRUE;
+	case WMS_FORCE:
+		{
+			static const std::regex reChannel("<((?:bs_|radio_)?channel)>([^]*?)</\\1>");
+			static const std::regex reVideo("<video>jk(\\d+)</video>");
+			static const std::regex reForce("<force>(\\d+)</force>");
+			static const std::regex reName("<name>([^<]*)</name>");
+
+			int ret = channelStream_.ProcessRecv(channelBuf_);
+			if (ret < 0) {
+				// 切断
+				if (ret == -2) {
+					channelBuf_.push_back('\0');
+					std::cmatch m;
+					const char *p = channelBuf_.data();
+					const char *pLast = &p[strlen(p)];
+					for (; std::regex_search(p, pLast, m, reChannel); p = m[0].second) {
+						std::cmatch mVideo;
+						if (std::regex_search(m[2].first, m[2].second, mVideo, reVideo)) {
+							FORCE_ELEM e;
+							e.jkID = atoi(mVideo[1].first);
+							std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
+								[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
+							if (it != forceList_.end() && it->jkID == e.jkID) {
+								// 勢いと(もしあれば)名前を上書き
+								std::cmatch mForce, mName;
+								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? atoi(mForce[1].first) : 0;
+								if (std::regex_search(m[2].first, m[2].second, mName, reName)) {
+									TCHAR szName[64];
+									int len = MultiByteToWideChar(CP_UTF8, 0, mName[1].first, static_cast<int>(mName[1].length()), szName, _countof(szName) - 1);
+									szName[len] = TEXT('\0');
+									DecodeEntityReference(szName);
+									it->name = szName;
+								}
+							}
+						}
+					}
+				}
+				SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
+			}
 		}
 		return TRUE;
 	case WMS_JK:

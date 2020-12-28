@@ -55,13 +55,13 @@ private:
 		tstring logfileFolder;
 		tstring execGetCookie;
 		tstring execGetV10Key;
+		std::string channelsUri;
 		tstring mailDecorations;
 		bool bAnonymity;
 		bool bUseOsdCompositor;
 		bool bUseTexture;
 		bool bUseDrawingThread;
 		bool bSetChannel;
-		bool bShowRadio;
 		int maxAutoReplace;
 		tstring abone;
 		int dropLogfileMode;
@@ -159,7 +159,9 @@ private:
 	int forwardOffsetDelta_;
 
 	// 通信用
+	CJKStream channelStream_;
 	CJKStream jkStream_;
+	std::vector<char> channelBuf_;
 	std::vector<char> jkBuf_;
 	int currentJKToGet_;
 	int currentJK_;
