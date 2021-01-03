@@ -1,5 +1,8 @@
 ﻿#include "stdafx.h"
 #include "Util.h"
+#include "unzip.h"
+#include "iowin32.h"
+#include <commdlg.h>
 #include <wincrypt.h>
 #pragma comment(lib, "crypt32.lib")
 #ifndef NO_USE_CNG
@@ -234,6 +237,51 @@ BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD
 	ofn.nMaxFile = nMaxFile;
 	lpstrFile[0] = TEXT('\0');
 	return GetOpenFileName(&ofn);
+}
+
+// tmToRead以前でもっとも新しいログファイルをアーカイブから探す
+const char *FindZippedLogfile(FIND_LOGFILE_CACHE &cache, bool &bSameResult, LPCTSTR zipPath, unsigned int tmToRead)
+{
+	// アーカイブ内ファイルの列挙は比較的重いのでキャッシュする
+	if (_tcsicmp(zipPath, cache.path.c_str())) {
+		cache.path = zipPath;
+		cache.list.clear();
+		zlib_filefunc64_def def;
+		fill_win32_filefunc64(&def);
+		unzFile f = unzOpen2_64(zipPath, &def);
+		if (f) {
+			if (unzGoToFirstFile(f) == UNZ_OK) {
+				do {
+					char name[16] = {};
+					if (unzGetCurrentFileInfo64(f, nullptr, name, 15, nullptr, 0, nullptr, 0) == UNZ_OK &&
+					    strlen(name) == 14 &&
+					    !strchr(name, '/') &&
+					    !unzStringFileNameCompare(name + 10, ".txt", 0)) {
+						cache.list.resize(cache.list.size() + 1);
+						strcpy_s(cache.list.back().name, name);
+					}
+				} while (unzGoToNextFile(f) == UNZ_OK);
+			}
+			unzClose(f);
+		}
+		cache.index = cache.list.size();
+	}
+
+	// tmToRead以前でもっとも新しいログファイルを探す
+	char target[16];
+	sprintf_s(target, "%010u.", tmToRead);
+	const char *name = nullptr;
+	size_t lastIndex = cache.index;
+	cache.index = cache.list.size();
+	for (size_t i = 0; i < cache.list.size(); ++i) {
+		if (strcmp(cache.list[i].name, target) < 0 &&
+		    (!name || strcmp(cache.list[i].name, name) > 0)) {
+			name = cache.list[i].name;
+			cache.index = i;
+		}
+	}
+	bSameResult = name && cache.index == lastIndex;
+	return name;
 }
 
 // ローカル形式をタイムシフトする

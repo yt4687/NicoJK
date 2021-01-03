@@ -14,6 +14,10 @@
 #include "NetworkServiceIDTable.h"
 #include "JKIDNameTable.h"
 #include "NicoJK.h"
+#include <dwmapi.h>
+#include <shellapi.h>
+
+#pragma comment(lib, "dwmapi.lib")
 
 #ifdef _DEBUG
 #include <stdarg.h>
@@ -122,6 +126,7 @@ CNicoJK::CNicoJK()
 	, hLogfile_(INVALID_HANDLE_VALUE)
 	, hLogfileLock_(INVALID_HANDLE_VALUE)
 	, currentReadLogfileJK_(-1)
+	, tmZippedLogfileCachedLast_(0)
 	, tmReadLogText_(0)
 	, readLogfileTick_(0)
 	, pcr_(0)
@@ -860,7 +865,7 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 					DWORD written;
 					WriteFile(hLogfile_, header, len, &written, nullptr);
 					currentLogfileJK_ = jkID;
-					OutputMessageLog((tstring(TEXT("ログファイル\"")) + &name[1] + TEXT("\"の書き込みを開始しました。")).c_str());
+					OutputMessageLog((tstring(TEXT("ログ\"")) + &name[1] + TEXT("\"の書き込みを開始しました。")).c_str());
 				} else {
 					CloseHandle(hLogfileLock_);
 					DeleteFile(path.c_str());
@@ -899,30 +904,46 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 		// ファイルチェックを大量に繰りかえすのを防ぐ
 		readLogfileTick_ = tick + READ_LOG_FOLDER_INTERVAL;
 		tstring path;
+		const char *zippedName = nullptr;
+		TCHAR latestZip[16] = {};
 		if (jkID == 0) {
 			// 指定ファイル再生
 			path = tmpSpecFileName_;
 		} else {
 			// jkIDのログファイル一覧を得る
 			TCHAR pattern[64];
-			_stprintf_s(pattern, TEXT("\\jk%d\\??????????.txt"), jkID);
+			_stprintf_s(pattern, TEXT("\\jk%d\\??????????.???"), jkID);
 			// tmToRead以前でもっとも新しいログファイルを探す
-			TCHAR target[64];
-			_stprintf_s(target, TEXT("%010u.txt"), tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
-			TCHAR latest[16] = {};
-			EnumFindFile((s_.logfileFolder + pattern).c_str(), [&target, &latest](const WIN32_FIND_DATA &fd) {
-				if (_tcsicmp(fd.cFileName, target) < 0 && (!latest[0] || _tcsicmp(fd.cFileName, latest) > 0) && _tcslen(fd.cFileName) == 14) {
-					_tcscpy_s(latest, fd.cFileName);
+			TCHAR target[16];
+			_stprintf_s(target, TEXT("%010u."), tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
+			TCHAR latestTxt[16] = {};
+			EnumFindFile((s_.logfileFolder + pattern).c_str(), [&](const WIN32_FIND_DATA &fd) {
+				if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+				    _tcscmp(fd.cFileName, target) < 0 &&
+				    _tcslen(fd.cFileName) == 14) {
+					if (!_tcsicmp(fd.cFileName + 10, TEXT(".txt"))) {
+						// テキスト形式のログ
+						if (_tcscmp(fd.cFileName, latestTxt) > 0) {
+							_tcscpy_s(latestTxt, fd.cFileName);
+						}
+					} else if (!_tcsicmp(fd.cFileName + 10, TEXT(".zip"))) {
+						// アーカイブされたログ
+						if (_tcscmp(fd.cFileName, latestZip) > 0) {
+							_tcscpy_s(latestZip, fd.cFileName);
+						}
+					}
 				}
 			});
-			if (latest[0]) {
+			if (latestTxt[0]) {
 				// 見つかった
-				_stprintf_s(pattern, TEXT("\\jk%d\\%s"), jkID, latest);
+				_stprintf_s(pattern, TEXT("\\jk%d\\%s"), jkID, latestTxt);
 				path = s_.logfileFolder + pattern;
 			}
 		}
+
+		// まずテキスト形式のログを探す
 		if (!path.empty()) {
-			if (readLogfile_.Open(path.c_str(), FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN)) {
+			if (readLogfile_.Open(path.c_str())) {
 				char last[CHAT_TAG_MAX];
 				unsigned int tmLast;
 				// 最終行がtmToReadより過去なら読む価値無し
@@ -931,7 +952,7 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 					readLogfile_.Close();
 				} else {
 					// まず2分探索
-					for (int scale = 2; ; scale *= 2) {
+					for (LONGLONG scale = 2; ; scale *= 2) {
 						char middle[CHAT_TAG_MAX];
 						int sign = 0;
 						for (;;) {
@@ -949,8 +970,8 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 							readLogfile_.ResetPointer();
 							break;
 						}
-						int moveSize = readLogfile_.Seek(sign * scale);
-						dprintf(TEXT("CNicoJK::ReadFromLogfile() moveSize=%d\n"), moveSize); // DEBUG
+						LONGLONG moveSize = readLogfile_.Seek(sign * scale);
+						dprintf(TEXT("CNicoJK::ReadFromLogfile() moveSize=%lld\n"), moveSize); // DEBUG
 						// 移動量が小さくなれば打ち切り
 						if (-32 * 1024 < moveSize && moveSize < 32 * 1024) {
 							// tmToReadよりも確実に過去になる位置まで戻す
@@ -961,23 +982,53 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 						}
 						readLogfile_.ReadLine(middle, 1);
 					}
-					// tmToReadより過去の行を読み飛ばす
-					for (;;) {
-						if (!readLogfile_.ReadLine(readLogText_, _countof(readLogText_))) {
-							// 閉じる
-							readLogfile_.Close();
-							break;
-						} else if (GetChatDate(&tmReadLogText_, readLogText_) && tmReadLogText_ > tmToRead/*>=はダメ*/) {
-							currentReadLogfileJK_ = jkID;
-
-							TCHAR debug[32];
-							_stprintf_s(debug, TEXT("jk%d\\"), jkID);
-							size_t lastSep = path.find_last_of(TEXT("/\\"));
-							OutputMessageLog((tstring(TEXT("ログファイル\"")) + debug + &path.c_str()[lastSep == tstring::npos ? 0 : lastSep + 1] +
-							                  TEXT("\"の読み込みを開始しました。")).c_str());
-							break;
-						}
+				}
+			}
+		}
+		// テキスト形式のログがなければアーカイブされたログを探す
+		if (!readLogfile_.IsOpen() && latestZip[0]) {
+			TCHAR pattern[64];
+			_stprintf_s(pattern, TEXT("\\jk%d\\%s"), jkID, latestZip);
+			path = s_.logfileFolder + pattern;
+			bool bSameResult;
+			zippedName = FindZippedLogfile(findZippedLogfileCache_, bSameResult, path.c_str(),
+			                               tmToRead + (READ_LOG_FOLDER_INTERVAL / 1000 + 2));
+			if (zippedName) {
+				// 前回と同じ結果のとき、キャッシュした最終行の時刻があれば使う
+				if (!bSameResult || tmZippedLogfileCachedLast_ == 0 || tmZippedLogfileCachedLast_ > tmToRead) {
+					// 読む必要がある。シークはできない
+					dprintf(TEXT("OpenZippedFile()\n")); // DEBUG
+					readLogfile_.OpenZippedFile(path.c_str(), zippedName);
+					tmZippedLogfileCachedLast_ = 0;
+				}
+			}
+		}
+		if (readLogfile_.IsOpen()) {
+			// tmToReadより過去の行を読み飛ばす
+			unsigned int tm = 0;
+			for (;;) {
+				if (!readLogfile_.ReadLine(readLogText_, _countof(readLogText_))) {
+					// 閉じる
+					readLogfile_.Close();
+					if (zippedName) {
+						// 最終行の時刻をキャッシュする
+						tmZippedLogfileCachedLast_ = tm;
+						dprintf(TEXT("tmZippedLogfileCachedLast_=%u\n"), tm); // DEBUG
 					}
+					break;
+				} else if (GetChatDate(&tmReadLogText_, readLogText_)) {
+					if (tmReadLogText_ > tmToRead) { // >=はダメ
+						currentReadLogfileJK_ = jkID;
+
+						TCHAR log[256];
+						size_t lastSep = path.find_last_of(TEXT("/\\"));
+						_stprintf_s(log, TEXT("ログ\"jk%d\\%.63s%s%S\"の読み込みを開始しました。"),
+						            jkID, &path.c_str()[lastSep == tstring::npos ? 0 : lastSep + 1],
+						            zippedName ? TEXT(":") : TEXT(""), zippedName ? zippedName : "");
+						OutputMessageLog(log);
+						break;
+					}
+					tm = tmReadLogText_;
 				}
 			}
 		}

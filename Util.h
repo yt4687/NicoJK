@@ -2,6 +2,16 @@
 
 #define FILETIME_MILLISECOND 10000LL
 
+struct FIND_LOGFILE_ELEM {
+	char name[16];
+};
+
+struct FIND_LOGFILE_CACHE {
+	tstring path;
+	std::vector<FIND_LOGFILE_ELEM> list;
+	size_t index;
+};
+
 std::vector<TCHAR> GetPrivateProfileSectionBuffer(LPCTSTR lpAppName, LPCTSTR lpFileName);
 void GetBufferedProfileString(LPCTSTR lpBuff, LPCTSTR lpKeyName, LPCTSTR lpDefault, LPTSTR lpReturnedString, DWORD nSize);
 int GetBufferedProfileInt(LPCTSTR lpBuff, LPCTSTR lpKeyName, int nDefault);
@@ -17,6 +27,7 @@ FILETIME &operator+=(FILETIME &ft, LONGLONG offset);
 LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2);
 bool AribToFileTime(const BYTE *pData, FILETIME *pft);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
+const char *FindZippedLogfile(FIND_LOGFILE_CACHE &cache, bool &bSameResult, LPCTSTR zipPath, unsigned int tmToRead);
 bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, size_t bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);

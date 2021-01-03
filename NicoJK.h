@@ -177,6 +177,8 @@ private:
 	HANDLE hLogfile_;
 	HANDLE hLogfileLock_;
 	int currentReadLogfileJK_;
+	FIND_LOGFILE_CACHE findZippedLogfileCache_;
+	unsigned int tmZippedLogfileCachedLast_;
 	CTextFileReader readLogfile_;
 	char readLogText_[CHAT_TAG_MAX];
 	unsigned int tmReadLogText_;
