@@ -110,7 +110,7 @@ private:
 	HWND FindVideoContainer();
 	DWORD GetCurrentNetworkServiceID();
 	bool GetChannelNetworkServiceID(int tuningSpace, int channelIndex, DWORD *pNtsID);
-	bool GetCurrentTot(FILETIME *pft);
+	LONGLONG GetCurrentTot();
 	bool IsMatchDriverName(LPCTSTR drivers);
 	void WriteToLogfile(int jkID, const char *text = nullptr);
 	bool ReadFromLogfile(int jkID, char *text = nullptr, int len = 0, unsigned int tmToRead = 0);
@@ -183,8 +183,12 @@ private:
 	char readLogText_[CHAT_TAG_MAX];
 	unsigned int tmReadLogText_;
 	DWORD readLogfileTick_;
-	FILETIME ftTot_[3];
-	DWORD totTick_[3];
+	LONGLONG llftTot_;
+	LONGLONG llftTotLast_;
+	LONGLONG llftTotPending_;
+	DWORD totTick_;
+	DWORD totTickLast_;
+	DWORD totTickPending_;
 	DWORD pcr_;
 	DWORD pcrTick_;
 	int pcrPid_;

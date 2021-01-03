@@ -129,6 +129,7 @@ CNicoJK::CNicoJK()
 	, tmZippedLogfileCachedLast_(0)
 	, tmReadLogText_(0)
 	, readLogfileTick_(0)
+	, llftTot_(-1)
 	, pcr_(0)
 	, pcrTick_(0)
 	, pcrPid_(-1)
@@ -140,8 +141,6 @@ CNicoJK::CNicoJK()
 	readLogText_[0] = '\0';
 	SETTINGS s = {};
 	s_ = s;
-	// TOTを取得できていないことを表す
-	ftTot_[0].dwHighDateTime = 0xFFFFFFFF;
 	pcrPids_[0] = -1;
 }
 
@@ -774,31 +773,25 @@ bool CNicoJK::GetChannelNetworkServiceID(int tuningSpace, int channelIndex, DWOR
 }
 
 // 再生中のストリームのTOT時刻(取得からの経過時間で補正済み)をUTCで取得する
-bool CNicoJK::GetCurrentTot(FILETIME *pft)
+LONGLONG CNicoJK::GetCurrentTot()
 {
 	CBlockLock lock(&streamLock_);
 	DWORD tick = GetTickCount();
-	if (ftTot_[0].dwHighDateTime == 0xFFFFFFFF) {
+	if (llftTot_ < 0) {
 		// TOTを取得できていない
-		return false;
+		return -1;
 	} else if (tick - pcrTick_ >= 2000) {
 		// 2秒以上PCRを取得できていない→ポーズ中?
-		*pft = ftTot_[0];
-		*pft += -s_.defaultPlaybackDelay * FILETIME_MILLISECOND;
-		return true;
-	} else if (ftTot_[1].dwHighDateTime == 0xFFFFFFFF) {
+		return llftTot_ - s_.defaultPlaybackDelay * FILETIME_MILLISECOND;
+	} else if (llftTotLast_ < 0) {
 		// 再生速度は分からない
-		*pft = ftTot_[0];
-		*pft += ((int)(tick - totTick_[0]) - s_.defaultPlaybackDelay) * FILETIME_MILLISECOND;
-		return true;
+		return llftTot_ + (static_cast<int>(tick - totTick_) - s_.defaultPlaybackDelay) * FILETIME_MILLISECOND;
 	} else {
-		DWORD delta = totTick_[0] - totTick_[1];
+		DWORD delta = totTick_ - totTickLast_;
 		// 再生速度(10%～1000%)
-		LONGLONG speed = !delta ? FILETIME_MILLISECOND : (ftTot_[0] - ftTot_[1]) / delta;
+		LONGLONG speed = !delta ? FILETIME_MILLISECOND : (llftTot_ - llftTotLast_) / delta;
 		speed = min(max(speed, FILETIME_MILLISECOND / 10), FILETIME_MILLISECOND * 10);
-		*pft = ftTot_[0];
-		*pft += ((int)(tick - totTick_[0]) - s_.defaultPlaybackDelay) * speed;
-		return true;
+		return llftTot_ + (static_cast<int>(tick - totTick_) - s_.defaultPlaybackDelay) * speed;
 	}
 }
 
@@ -854,8 +847,10 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 				hLogfile_ = CreateFile((s_.logfileFolder + name).c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 				if (hLogfile_ != INVALID_HANDLE_VALUE) {
 					// ヘッダを書き込む(別に無くてもいい)
+					LONGLONG llftUtc = UnixTimeToFileTime(tm);
 					FILETIME ftUtc, ft;
-					UnixTimeToFileTime(tm, &ftUtc);
+					ftUtc.dwLowDateTime = static_cast<DWORD>(llftUtc);
+					ftUtc.dwHighDateTime = static_cast<DWORD>(llftUtc >> 32);
 					FileTimeToLocalFileTime(&ftUtc, &ft);
 					SYSTEMTIME st;
 					FileTimeToSystemTime(&ft, &st);
@@ -1369,8 +1364,10 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 
 		// リストボックスのログ表示キューに追加
 		LOG_ELEM e;
+		LONGLONG llftUtc = UnixTimeToFileTime(tm);
 		FILETIME ftUtc, ft;
-		UnixTimeToFileTime(tm, &ftUtc);
+		ftUtc.dwLowDateTime = static_cast<DWORD>(llftUtc);
+		ftUtc.dwHighDateTime = static_cast<DWORD>(llftUtc >> 32);
 		FileTimeToLocalFileTime(&ftUtc, &ft);
 		FileTimeToSystemTime(&ft, &e.st);
 		e.no = 0;
@@ -1382,7 +1379,7 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 			len = MultiByteToWideChar(CP_UTF8, 0, mm[1].first, static_cast<int>(mm[1].length()), e.marker, _countof(e.marker) - 1);
 			e.marker[len] = TEXT('\0');
 			if (std::regex_search(m[1].first, m[1].second, mm, reNo)) {
-				e.no = atoi(mm[1].first);
+				e.no = strtol(mm[1].first, nullptr, 10);
 			}
 			// logcmd属性(ローカル拡張)
 			char logcmd[256];
@@ -2068,13 +2065,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					DeleteFile(tmpSpecFileName_.c_str());
 					bSpecFile_ = false;
 				} else {
-					FILETIME ft;
+					LONGLONG llft = 0;
 					TCHAR path[MAX_PATH];
 					bool bRel = SendDlgItemMessage(hwnd, IDC_CHECK_RELATIVE, BM_GETCHECK, 0, 0) == BST_CHECKED;
 					// ダイアログを開いている間にD&Dされるかもしれない
-					if ((!bRel || GetCurrentTot(&ft)) &&
+					if ((!bRel || (llft = GetCurrentTot()) >= 0) &&
 					    FileOpenDialog(hwnd, TEXT("実況ログ(*.jkl;*.xml)\0*.jkl;*.xml\0すべてのファイル\0*.*\0"), path, _countof(path)) &&
-					    !bSpecFile_ && ImportLogfile(path, tmpSpecFileName_.c_str(), bRel ? FileTimeToUnixTime(ft) + 2 : 0))
+					    !bSpecFile_ && ImportLogfile(path, tmpSpecFileName_.c_str(), bRel ? FileTimeToUnixTime(llft) + 2 : 0))
 					{
 						readLogfileTick_ = GetTickCount();
 						bSpecFile_ = true;
@@ -2263,11 +2260,11 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				commentWindow_.Forward(min(static_cast<int>(tick - forwardTick_), 5000));
 				forwardTick_ = tick;
 				// 過去ログがあれば処理する
-				FILETIME ft;
-				if (GetCurrentTot(&ft)) {
+				LONGLONG llft = GetCurrentTot();
+				if (llft >= 0) {
 					bool bRead = false;
 					char text[CHAT_TAG_MAX];
-					unsigned int tm = FileTimeToUnixTime(ft);
+					unsigned int tm = FileTimeToUnixTime(llft);
 					tm = forwardOffset_ < 0 ? tm - (-forwardOffset_ / 1000) : tm + forwardOffset_ / 1000;
 					while (ReadFromLogfile(bSpecFile_ ? 0 : currentJKToGet_, text, _countof(text), tm)) {
 						ProcessChatTag(text);
@@ -2309,11 +2306,11 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			if (--dropFileTimeout_ < 0 || bSpecFile_) {
 				KillTimer(hwnd, TIMER_OPEN_DROPFILE);
 			} else {
-				FILETIME ft;
+				LONGLONG llft = 0;
 				bool bRel = SendDlgItemMessage(hwnd, IDC_CHECK_RELATIVE, BM_GETCHECK, 0, 0) == BST_CHECKED;
-				if (!bRel || GetCurrentTot(&ft)) {
+				if (!bRel || (llft = GetCurrentTot()) >= 0) {
 					KillTimer(hwnd, TIMER_OPEN_DROPFILE);
-					if (ImportLogfile(dropFileName_.c_str(), tmpSpecFileName_.c_str(), bRel ? FileTimeToUnixTime(ft) + 2 : 0)) {
+					if (ImportLogfile(dropFileName_.c_str(), tmpSpecFileName_.c_str(), bRel ? FileTimeToUnixTime(llft) + 2 : 0)) {
 						readLogfileTick_ = GetTickCount();
 						bSpecFile_ = true;
 						SendDlgItemMessage(hwnd, IDC_CHECK_SPECFILE, BM_SETCHECK, BST_CHECKED, 0);
@@ -2348,7 +2345,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		dprintf(TEXT("CNicoJK::ForceDialogProcMain() WM_RESET_STREAM\n")); // DEBUG
 		{
 			CBlockLock lock(&streamLock_);
-			ftTot_[0].dwHighDateTime = 0xFFFFFFFF;
+			llftTot_ = -1;
 		}
 		ReadFromLogfile(-1);
 		return TRUE;
@@ -2464,13 +2461,13 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						std::cmatch mVideo;
 						if (std::regex_search(m[2].first, m[2].second, mVideo, reVideo)) {
 							FORCE_ELEM e;
-							e.jkID = atoi(mVideo[1].first);
+							e.jkID = strtol(mVideo[1].first, nullptr, 10);
 							std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
 								[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
 							if (it != forceList_.end() && it->jkID == e.jkID) {
 								// 勢いと(もしあれば)名前を上書き
 								std::cmatch mForce, mName;
-								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? atoi(mForce[1].first) : 0;
+								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? strtol(mForce[1].first, nullptr, 10) : 0;
 								if (std::regex_search(m[2].first, m[2].second, mName, reName)) {
 									TCHAR szName[64];
 									int len = MultiByteToWideChar(CP_UTF8, 0, mName[1].first, static_cast<int>(mName[1].length()), szName, _countof(szName) - 1);
@@ -2523,7 +2520,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						if (std::regex_search(rpl, m, reChatResult)) {
 							// コメント投稿失敗の応答を取得した
 							TCHAR text[64];
-							_stprintf_s(text, TEXT("Error:コメント投稿に失敗しました(status=%d)。"), atoi(m[1].first));
+							_stprintf_s(text, TEXT("Error:コメント投稿に失敗しました(status=%d)。"), strtol(m[1].first, nullptr, 10));
 							OutputMessageLog(text);
 						} else if (std::regex_search(rpl, reXRoom)) {
 							// 接続情報を取得した
@@ -2700,14 +2697,14 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 			} else if (abs(pcrDiff) < 15 * 60 * 45000) {
 				// -15～0分、+1秒～15分PCRが飛んでいる場合、シークとみなし、
 				// シークした分だけTOTをずらして読み込み直す
-				if (pThis->ftTot_[0].dwHighDateTime != 0xFFFFFFFF && pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFF) {
+				if (pThis->llftTot_ >= 0 && pThis->llftTotPending_ != -1) {
 					long long totDiff = pcrDiff * FILETIME_MILLISECOND / 45;
-					pThis->ftTot_[0] += totDiff;
-					if (pThis->ftTot_[1].dwHighDateTime != 0xFFFFFFFF) {
-						pThis->ftTot_[1] += totDiff;
+					pThis->llftTot_ += totDiff;
+					if (pThis->llftTotLast_ >= 0) {
+						pThis->llftTotLast_ += totDiff;
 					}
 					// 保留中のTOTはシーク後に取得した可能性があるので捨てる(再生速度の推定が狂ってコメントが大量に流れたりするのを防ぐため)
-					pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFE;
+					pThis->llftTotPending_ = -2;
 					pThis->bResyncComment_ = true;
 				} else {
 					bReset = true;
@@ -2716,20 +2713,22 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 				// それ以上飛んでたら別ストリームと見なしてリセット
 				bReset = true;
 			}
-			// 保留中のTOT(要素2)はPCRの取得後に利用可能(要素0にシフト)にする
-			if (pThis->ftTot_[0].dwHighDateTime != 0xFFFFFFFF && pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFE) {
-				if (pThis->ftTot_[2].dwHighDateTime != 0xFFFFFFFF) {
-					pThis->ftTot_[1] = pThis->ftTot_[0];
-					pThis->ftTot_[0] = pThis->ftTot_[2];
-					pThis->totTick_[1] = pThis->totTick_[0];
-					pThis->totTick_[0] = pThis->totTick_[2];
+			// 保留中のTOTはPCRの取得後に利用可能(llftTot_にシフト)にする
+			if (pThis->llftTot_ >= 0) {
+				if (pThis->llftTotPending_ >= 0) {
+					pThis->llftTotLast_ = pThis->llftTot_;
+					pThis->llftTot_ = pThis->llftTotPending_;
+					pThis->totTickLast_ = pThis->totTick_;
+					pThis->totTick_ = pThis->totTickPending_;
 				}
-				pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFE;
+				// llftTot_に対応するPCRを取得済みであることを示す
+				pThis->llftTotPending_ = -2;
 			}
 			pThis->pcr_ = pcr;
 		}
 		if (bReset) {
-			pThis->ftTot_[0].dwHighDateTime = 0xFFFFFFFF;
+			// TOTを取得できていないことを表す
+			pThis->llftTot_ = -1;
 			PostMessage(pThis->hForce_, WM_RESET_STREAM, 0, 0);
 		}
 	}
@@ -2751,21 +2750,22 @@ BOOL CALLBACK CNicoJK::StreamCallback(BYTE *pData, void *pClientData)
 			// TOT or TDT (ARIB STD-B10)
 			if (pTable + 7 < pData + 188 && (pTable[0] == 0x73 || pTable[0] == 0x70)) {
 				// TOT時刻とTickカウントを記録する
-				FILETIME ft;
-				if (AribToFileTime(&pTable[3], &ft)) {
+				LONGLONG llft = AribToFileTime(&pTable[3]);
+				if (llft >= 0) {
 					// UTCに変換
-					ft += -32400000LL * FILETIME_MILLISECOND;
+					llft += -32400000LL * FILETIME_MILLISECOND;
 					dprintf(TEXT("CNicoJK::StreamCallback() TOT\n")); // DEBUG
 					CBlockLock lock(&pThis->streamLock_);
 					// 時刻が変化したときだけ
-					if (ft - pThis->ftTot_[0] != 0) {
-						pThis->ftTot_[2] = ft;
-						pThis->totTick_[2] = GetTickCount();
-						if (pThis->ftTot_[0].dwHighDateTime == 0xFFFFFFFF) {
-							pThis->ftTot_[0] = pThis->ftTot_[2];
-							pThis->totTick_[0] = pThis->totTick_[2];
-							pThis->ftTot_[1].dwHighDateTime = 0xFFFFFFFF;
-							pThis->ftTot_[2].dwHighDateTime = 0xFFFFFFFF;
+					if (llft != pThis->llftTot_) {
+						pThis->llftTotPending_ = llft;
+						pThis->totTickPending_ = GetTickCount();
+						if (pThis->llftTot_ < 0) {
+							// 初回だけ速やかに取得
+							pThis->llftTot_ = pThis->llftTotPending_;
+							pThis->totTick_ = pThis->totTickPending_;
+							pThis->llftTotLast_ = -1;
+							pThis->llftTotPending_ = -1;
 						}
 					}
 				}

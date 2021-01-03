@@ -177,51 +177,31 @@ bool GetChatDate(unsigned int *tm, const char *tag)
 	return false;
 }
 
-void UnixTimeToFileTime(unsigned int tm, FILETIME *pft)
+LONGLONG UnixTimeToFileTime(unsigned int tm)
 {
-	LONGLONG ll = static_cast<LONGLONG>(tm) * 10000000 + 116444736000000000;
-	pft->dwLowDateTime = static_cast<DWORD>(ll);
-	pft->dwHighDateTime = static_cast<DWORD>(ll >> 32);
+	return tm * 10000000LL + 116444736000000000;
 }
 
-unsigned int FileTimeToUnixTime(const FILETIME &ft)
+unsigned int FileTimeToUnixTime(LONGLONG ll)
 {
-	LONGLONG ll = (static_cast<LONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
 	return static_cast<unsigned int>((ll - 116444736000000000) / 10000000);
 }
 
-FILETIME &operator+=(FILETIME &ft, LONGLONG offset)
-{
-	LONGLONG ll = (static_cast<LONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
-	ll += offset;
-	ft.dwLowDateTime = static_cast<DWORD>(ll);
-	ft.dwHighDateTime = static_cast<DWORD>(ll >> 32);
-	return ft;
-}
-
-LONGLONG operator-(const FILETIME &ft1, const FILETIME &ft2)
-{
-	LONGLONG ll1 = (static_cast<LONGLONG>(ft1.dwHighDateTime) << 32) | ft1.dwLowDateTime;
-	LONGLONG ll2 = (static_cast<LONGLONG>(ft2.dwHighDateTime) << 32) | ft2.dwLowDateTime;
-	return ll1 - ll2;
-}
-
-bool AribToFileTime(const BYTE *pData, FILETIME *pft)
+LONGLONG AribToFileTime(const BYTE *pData)
 {
 	if (pData[0]==0xFF && pData[1]==0xFF && pData[2]==0xFF && pData[3]==0xFF && pData[4]==0xFF) {
 		// 不指定
-		return false;
+		return -1;
 	}
 	// 1858-11-17
-	pft->dwLowDateTime = 2303934464;
-	pft->dwHighDateTime = 18947191;
+	LONGLONG llft = 81377568000000000;
 	// MJD形式の日付
-	*pft += (pData[0] << 8 | pData[1]) * FILETIME_MILLISECOND * 86400000;
+	llft += (pData[0] << 8 | pData[1]) * FILETIME_MILLISECOND * 86400000;
 	// BCD形式の時刻
-	*pft += ((pData[2] >> 4) * 10 + (pData[2] & 0x0F)) * FILETIME_MILLISECOND * 3600000;
-	*pft += ((pData[3] >> 4) * 10 + (pData[3] & 0x0F)) * FILETIME_MILLISECOND * 60000;
-	*pft += ((pData[4] >> 4) * 10 + (pData[4] & 0x0F)) * FILETIME_MILLISECOND * 1000;
-	return true;
+	llft += ((pData[2] >> 4) * 10 + (pData[2] & 0x0F)) * FILETIME_MILLISECOND * 3600000;
+	llft += ((pData[3] >> 4) * 10 + (pData[3] & 0x0F)) * FILETIME_MILLISECOND * 60000;
+	llft += ((pData[4] >> 4) * 10 + (pData[4] & 0x0F)) * FILETIME_MILLISECOND * 1000;
+	return llft;
 }
 
 // ファイルを開くダイアログ
