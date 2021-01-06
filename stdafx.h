@@ -20,6 +20,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <WindowsX.h>
+#include <MMSystem.h>
 #include <objbase.h>
 #include <GdiPlus.h>
 #include <vector>
@@ -29,10 +30,15 @@
 #include <utility>
 #include <algorithm>
 #include <tchar.h>
+#include <dwmapi.h>
+#include <CommDlg.h>
+#include <ShellAPI.h>
 #include <process.h>
 
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "imm32.lib")
 
 // NOMINMAXではGdiPlus.hが通らない
 #undef min

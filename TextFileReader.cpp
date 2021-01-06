@@ -1,73 +1,46 @@
 ﻿#include "stdafx.h"
 #include "TextFileReader.h"
-#include "unzip.h"
-#include "iowin32.h"
-#include <fcntl.h>
-#include <io.h>
-#include <share.h>
 
 CTextFileReader::CTextFileReader()
-	: fp_(nullptr, fclose)
-	, zipf_(nullptr, unzClose)
+	: hFile_(INVALID_HANDLE_VALUE)
 	, bEof_(false)
 {
 	buf_[0] = '\0';
 }
 
-bool CTextFileReader::Open(LPCTSTR path)
+CTextFileReader::~CTextFileReader()
 {
 	Close();
-	// 継承を無効にするため低水準で開く
-	int fd;
-	if (_tsopen_s(&fd, path, _O_BINARY | _O_NOINHERIT | _O_RDONLY | _O_SEQUENTIAL, _SH_DENYNO, 0) == 0) {
-		fp_.reset(_tfdopen(fd, TEXT("rb")));
-		if (fp_) {
-			if (setvbuf(fp_.get(), nullptr, _IONBF, 0) == 0) {
-				return true;
-			}
-			fp_.reset();
-		} else {
-			_close(fd);
-		}
-	}
-	return false;
 }
 
-bool CTextFileReader::OpenZippedFile(LPCTSTR zipPath, const char *fileName)
+bool CTextFileReader::Open(LPCTSTR path, DWORD shareMode, DWORD flagsAndAttributes)
 {
 	Close();
-	zlib_filefunc64_def def;
-	fill_win32_filefunc64(&def);
-	zipf_.reset(unzOpen2_64(zipPath, &def));
-	if (zipf_) {
-		if (unzLocateFile(zipf_.get(), fileName, 0) == UNZ_OK && unzOpenCurrentFile(zipf_.get()) == UNZ_OK) {
-			return true;
-		}
-		zipf_.reset();
-	}
-	return false;
+	hFile_ = CreateFile(path, GENERIC_READ, shareMode, nullptr, OPEN_EXISTING, flagsAndAttributes, nullptr);
+	return IsOpen();
 }
 
 void CTextFileReader::Close()
 {
-	fp_.reset();
-	zipf_.reset();
+	if (IsOpen()) {
+		CloseHandle(hFile_);
+		hFile_ = INVALID_HANDLE_VALUE;
+	}
 	bEof_ = false;
 	buf_[0] = '\0';
 }
 
 // ファイルポインタを先頭に戻す
-void CTextFileReader::ResetPointer()
+bool CTextFileReader::ResetPointer()
 {
 	if (IsOpen()) {
-		if (zipf_) {
-			unzOpenCurrentFile(zipf_.get());
-		} else {
-			rewind(fp_.get());
+		if (SetFilePointer(hFile_, 0, nullptr, FILE_BEGIN) != INVALID_SET_FILE_POINTER) {
+			bEof_ = false;
+			buf_[0] = '\0';
+			return true;
 		}
-		bEof_ = false;
-		buf_[0] = '\0';
 	}
+	return false;
 }
 
 // 1行またはNULを含む最大textMax(>0)バイト読み込む
@@ -82,18 +55,12 @@ size_t CTextFileReader::ReadLine(char *text, size_t textMax)
 	for (;;) {
 		if (!bEof_) {
 			size_t bufLen = strlen(buf_);
-			size_t readLen;
-			if (zipf_) {
-				int n = unzReadCurrentFile(zipf_.get(), buf_ + bufLen, static_cast<unsigned int>(BUF_SIZE - bufLen - 1));
-				readLen = n < 0 ? 0 : n;
-			} else {
-				readLen = fread(buf_ + bufLen, 1, BUF_SIZE - bufLen - 1, fp_.get());
-			}
-			if (readLen == 0) {
+			DWORD read;
+			if (!ReadFile(hFile_, buf_ + bufLen, static_cast<DWORD>(BUF_SIZE - bufLen - 1), &read, nullptr)) {
 				buf_[bufLen] = '\0';
 				bEof_ = true;
 			} else {
-				buf_[bufLen + readLen] = '\0';
+				buf_[bufLen + read] = '\0';
 				if (strlen(buf_) < BUF_SIZE - 1) {
 					bEof_ = true;
 				}
@@ -124,21 +91,21 @@ size_t CTextFileReader::ReadLine(char *text, size_t textMax)
 // 戻り値はNULを含む読み込まれたバイト数
 size_t CTextFileReader::ReadLastLine(char *text, size_t textMax)
 {
-	if (!fp_) {
+	if (!IsOpen()) {
 		return 0;
 	}
-	// バイナリモードでのSEEK_ENDは厳密には議論あるが、Windowsでは問題ない
-	if (_fseeki64(fp_.get(), 0, SEEK_END) != 0 ||
-	    _fseeki64(fp_.get(), -min<LONGLONG>(textMax - 1, _ftelli64(fp_.get())), SEEK_END) != 0) {
+	// 2GB以上には対応しない
+	size_t fileSize = GetFileSize(hFile_, nullptr);
+	if (fileSize > 0x7FFFFFFF ||
+	    SetFilePointer(hFile_, -static_cast<int>(min(textMax - 1, fileSize)), nullptr, FILE_END) == INVALID_SET_FILE_POINTER) {
+		return 0;
+	}
+	DWORD read;
+	if (!ReadFile(hFile_, text, static_cast<DWORD>(textMax - 1), &read, nullptr)) {
 		ResetPointer();
 		return 0;
 	}
-	size_t readLen = fread(text, 1, textMax - 1, fp_.get());
-	if (readLen == 0) {
-		ResetPointer();
-		return 0;
-	}
-	text[readLen] = '\0';
+	text[read] = '\0';
 	size_t textLen = strlen(text);
 	if (textLen >= 1 && text[textLen-1] == '\n') {
 		text[--textLen] = '\0';
@@ -159,24 +126,26 @@ size_t CTextFileReader::ReadLastLine(char *text, size_t textMax)
 
 // 現在位置からファイルサイズ/scaleだけシークする
 // 戻り値はファイルポインタの移動バイト数
-LONGLONG CTextFileReader::Seek(LONGLONG scale)
+int CTextFileReader::Seek(int scale)
 {
-	if (!fp_ || scale == 0) {
+	if (!IsOpen() || scale == 0) {
 		return 0;
 	}
-	LONGLONG filePos = _ftelli64(fp_.get());
-	if (_fseeki64(fp_.get(), 0, SEEK_END) != 0) {
-		_fseeki64(fp_.get(), filePos, SEEK_SET);
+	DWORD fileSize = GetFileSize(hFile_, nullptr);
+	DWORD filePos = SetFilePointer(hFile_, 0, nullptr, FILE_CURRENT);
+	if (fileSize > 0x7FFFFFFF || filePos == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}
-	LONGLONG fileSize = _ftelli64(fp_.get());
-	LONGLONG nextPos = fileSize / (scale < 0 ? -scale : scale) * (scale < 0 ? -1 : 1) + filePos;
-	nextPos = min(max<LONGLONG>(nextPos, 0), fileSize);
-	if (_fseeki64(fp_.get(), nextPos, SEEK_SET) != 0) {
-		_fseeki64(fp_.get(), filePos, SEEK_SET);
+	LONGLONG llNextPos = static_cast<LONGLONG>(fileSize) / (scale < 0 ? -scale : scale) * (scale < 0 ? -1 : 1) + filePos;
+	DWORD nextPos = llNextPos < 0 ? 0 : llNextPos >= fileSize ? filePos : static_cast<DWORD>(llNextPos);
+	if (nextPos == filePos) {
+		return 0;
+	}
+	nextPos = SetFilePointer(hFile_, nextPos, nullptr, FILE_BEGIN);
+	if (nextPos == INVALID_SET_FILE_POINTER) {
 		return 0;
 	}
 	bEof_ = false;
 	buf_[0] = '\0';
-	return nextPos - filePos;
+	return static_cast<int>(nextPos) - static_cast<int>(filePos);
 }

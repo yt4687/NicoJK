@@ -1,22 +1,21 @@
 ﻿#pragma once
 
-// マルチバイトテキストファイル読み込み
+// マルチバイトテキストファイル読み込み(ReadFileのラッパ)
 class CTextFileReader
 {
 public:
 	static const size_t BUF_SIZE = 512;
 	CTextFileReader();
-	bool Open(LPCTSTR path);
-	bool OpenZippedFile(LPCTSTR zipPath, const char *fileName);
+	~CTextFileReader();
+	bool Open(LPCTSTR path, DWORD shareMode, DWORD flagsAndAttributes);
 	void Close();
-	void ResetPointer();
+	bool ResetPointer();
 	size_t ReadLine(char *text, size_t textMax);
 	size_t ReadLastLine(char *text, size_t textMax);
-	LONGLONG Seek(LONGLONG scale);
-	bool IsOpen() const { return fp_ || zipf_; }
+	int Seek(int scale);
+	bool IsOpen() const { return hFile_ != INVALID_HANDLE_VALUE; }
 private:
-	std::unique_ptr<FILE, decltype(&fclose)> fp_;
-	std::unique_ptr<void, int(*)(void *)> zipf_;
+	HANDLE hFile_;
 	bool bEof_;
 	char buf_[BUF_SIZE];
 };
