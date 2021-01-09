@@ -5,7 +5,7 @@
 };
 
 static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
-	// ニコニコ実況チャンネルリスト(2013-01-02時点)(jkIDでソート必須)
+	// ニコニコ実況チャンネルリスト(2020-01-09時点)(jkIDでソート必須)
 	{   1, TEXT("NHK 総合"), "ch2646436" },
 	{   2, TEXT("Eテレ"), "ch2646437" },
 	{   4, TEXT("日本テレビ"), "ch2646438" },
@@ -46,5 +46,6 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{ 255, TEXT("BS日本映画専門チャンネル") },
 	{ 256, TEXT("ディズニー・チャンネル") },
 	{ 258, TEXT("Dlife") },
+	{ 333, TEXT("AT-X") },
 	{ 910, TEXT("SOLiVE24") },
 };
