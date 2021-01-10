@@ -2495,7 +2495,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		return TRUE;
 	case WMS_JK:
 		{
-			static const std::regex reChatResult("^<chat_result(?= ).*? status=\"(?!0\")(\\d+)\"");
+			static const std::regex reChatResult("^<chat_result(?= )[^>]*? status=\"(?!0\")(\\d+)\"");
 			static const std::regex reXRoom("^<x_room ");
 			static const std::regex reNickname("^<x_room(?= )[^>]*? nickname=\"(.*?)\"");
 			static const std::regex reIsLoggedIn("^<x_room(?= )[^>]*? is_logged_in=\"1\"");
@@ -2509,18 +2509,18 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				currentJK_ = -1;
 			} else {
 				// 受信中
-				{
-					bool bRead = false;
-					for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
-						std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
-						if (itEnd == jkBuf_.end()) {
-							break;
-						}
-						*itEnd = '\0';
-						if (itEnd - it >= CHAT_TAG_MAX) {
-							*(it + CHAT_TAG_MAX - 1) = '\0';
-						}
-						const char *rpl = &*it;
+				bool bRead = false;
+				for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
+					std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
+					if (itEnd == jkBuf_.end()) {
+						break;
+					}
+					*itEnd = '\0';
+					if (itEnd - it >= CHAT_TAG_MAX) {
+						*(it + CHAT_TAG_MAX - 1) = '\0';
+					}
+					const char *rpl = &*it;
+					if (!strncmp(rpl, "<chat ", 6)) {
 						// 指定ファイル再生中は混じると鬱陶しいので表示しない。後退指定はある程度反映
 						if (ProcessChatTag(rpl, !bSpecFile_, min(max(-forwardOffset_, 0), 30000))) {
 							dprintf(TEXT("#")); // DEBUG
@@ -2528,6 +2528,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							++currentJKChatCount_;
 							bRead = true;
 						}
+					} else {
 						std::cmatch m;
 						if (std::regex_search(rpl, m, reChatResult)) {
 							// コメント投稿失敗の応答を取得した
@@ -2548,17 +2549,17 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							_stprintf_s(text, TEXT("コメントサーバに接続しました(%s%s)。"), isLoggedIn ? TEXT("login=") : TEXT(""), nickname);
 							OutputMessageLog(text);
 						}
+					}
 #ifdef _DEBUG
-						TCHAR debug[512];
-						int debugLen = MultiByteToWideChar(CP_UTF8, 0, rpl, -1, debug, _countof(debug) - 1);
-						debug[debugLen] = TEXT('\0');
-						dprintf(TEXT("%s\n"), debug); // DEBUG
+					TCHAR debug[512];
+					int debugLen = MultiByteToWideChar(CP_UTF8, 0, rpl, -1, debug, _countof(debug) - 1);
+					debug[debugLen] = TEXT('\0');
+					dprintf(TEXT("%s\n"), debug); // DEBUG
 #endif
-						it = itEnd + 1;
-					}
-					if (bRead && bDisplayLogList_) {
-						SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
-					}
+					it = itEnd + 1;
+				}
+				if (bRead && bDisplayLogList_) {
+					SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
 				}
 			}
 		}

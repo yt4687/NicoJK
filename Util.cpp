@@ -187,7 +187,7 @@ COLORREF GetColor(const char *command)
 bool GetChatDate(unsigned int *tm, const char *tag)
 {
 	// TODO: dateは秒精度しかないので独自に属性値つけるかvposを解釈するとよりよいかも
-	static const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
+	static const std::regex re("^<chat(?= )[^>]*? date=\"(\\d+)\"");
 	std::cmatch m;
 	if (std::regex_search(tag, m, re)) {
 		*tm = strtoul(m[1].first, nullptr, 10);
@@ -292,7 +292,7 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".txt")) &&
 	    !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
-		const std::regex re("^<chat[^>]*? date=\"(\\d+)\"");
+		const std::regex re("^<chat(?= )[^>]*? date=\"(\\d+)\"");
 		std::cmatch m;
 		char buf[4096];
 		unsigned int tmOld = 0;
@@ -357,7 +357,7 @@ static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 			int c;
 			for (int d = '\0'; (c = fgetc(fpSrc.get())) != EOF && !(d=='\n' && (c=='\n' || c=='\r')); d = c);
 
-			const std::regex re("<chat[^>]*? date=\"(\\d+)\"[^]*?</chat>");
+			const std::regex re("<chat(?= )[^>]*? date=\"(\\d+)\"[^]*?</chat>");
 			std::cmatch m;
 			int bufLen = 0;
 			unsigned int tmOld = 0;
@@ -391,7 +391,7 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 		char buf[4096];
 		if (fgets(buf, _countof(buf), fpSrc.get()) && strstr(buf, "<?xml") && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
 			fpDest.reset(fp);
-			const std::regex re("<chat[^>]*? date=\"(\\d+)\"[^]*?</chat>");
+			const std::regex re("<chat(?= )[^>]*? date=\"(\\d+)\"[^]*?</chat>");
 			std::cmatch m;
 			char tag[8192];
 			tag[0] = '\0';
