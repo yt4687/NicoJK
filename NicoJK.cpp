@@ -117,6 +117,9 @@ CNicoJK::CNicoJK()
 	, forwardOffsetDelta_(0)
 	, currentJKToGet_(-1)
 	, currentJK_(-1)
+	, currentJKChatCount_(0)
+	, currentJKForceByChatCount_(-1)
+	, currentJKForceByChatCountTick_(0)
 	, lastPostTick_(0)
 	, bRecording_(false)
 	, bUsingLogfileDriver_(false)
@@ -305,7 +308,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 							f.name = p->name;
 						}
 						e.name = f.name;
-						e.force = 0;
+						e.force = -1;
 						// まだなければ追加
 						std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
 							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
@@ -576,7 +579,7 @@ void CNicoJK::LoadForceListFromIni()
 			e.jkID = DEFAULT_JKID_NAME_TABLE[i].jkID;
 			e.name = DEFAULT_JKID_NAME_TABLE[i].name;
 			e.chatStreamID = DEFAULT_JKID_NAME_TABLE[i].chatStreamID;
-			e.force = 0;
+			e.force = -1;
 			forceList_.push_back(e);
 		}
 	}
@@ -616,7 +619,7 @@ void CNicoJK::LoadForceListFromIni()
 						break;
 					}
 				}
-				e.force = 0;
+				e.force = -1;
 				// まだなければ追加
 				std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
 					[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
@@ -1903,6 +1906,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			jkStream_.BeginClose();
 			channelStream_.Close();
 			jkStream_.Close();
+			currentJK_ = -1;
 
 			if (hSyncThread_) {
 				bQuitSyncThread_ = true;
@@ -2192,12 +2196,27 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	case WM_TIMER:
 		switch (wParam) {
 		case TIMER_UPDATE:
+			if (currentJK_ >= 0) {
+				// 自力計算による勢い情報を更新する
+				DWORD tick = GetTickCount();
+				if (tick - currentJKForceByChatCountTick_ >= 30000) {
+					// 初回は10コメ引く
+					int count = max(currentJKChatCount_ - (currentJKForceByChatCount_ < 0 ? 10 : 0), 0);
+					currentJKForceByChatCount_ = count * 60 / ((tick - currentJKForceByChatCountTick_) / 1000);
+					currentJKChatCount_ = 0;
+					currentJKForceByChatCountTick_ = tick;
+				}
+			}
 			if (!bDisplayLogList_ && IsWindowVisible(hwnd)) {
 				// 勢いを更新する
 				if (!s_.channelsUri.empty() &&
 				    channelStream_.Send(hwnd, WMS_FORCE, 'G', s_.channelsUri.c_str())) {
 					channelBuf_.clear();
 				} else {
+					for (auto it = forceList_.begin(); it != forceList_.end(); ++it) {
+						// 自力計算による勢い情報を使う
+						it->force = it->jkID == currentJK_ ? currentJKForceByChatCount_ : -1;
+					}
 					SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
 				}
 			}
@@ -2213,6 +2232,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				if (it != forceList_.end() && it->jkID == e.jkID && !it->chatStreamID.empty()) {
 					if (jkStream_.Send(hwnd, WMS_JK, 'L', (it->chatStreamID + " " + cookie_).c_str())) {
 						currentJK_ = currentJKToGet_;
+						currentJKChatCount_ = 0;
+						currentJKForceByChatCount_ = -1;
+						currentJKForceByChatCountTick_ = GetTickCount();
 						OutputMessageLog(TEXT("コメントサーバに接続開始しました。"));
 					}
 				}
@@ -2428,8 +2450,15 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// 勢いリスト表示中
 				for (auto it = forceList_.cbegin(); it != forceList_.end(); ++it) {
 					TCHAR text[256];
-					_stprintf_s(text, TEXT("jk%d (%.63s-%.63S) 勢い：%d"),
-					            it->jkID, it->name.c_str(), it->chatStreamID.c_str(), it->force);
+					if (it->force < 0) {
+						_stprintf_s(text, TEXT("jk%d 勢? (%.63s%s%.63S)"),
+						            it->jkID, it->name.c_str(),
+						            it->chatStreamID.empty() ? TEXT("") : TEXT("-"), it->chatStreamID.c_str());
+					} else {
+						_stprintf_s(text, TEXT("jk%d 勢%d (%.63s%s%.63S)"),
+						            it->jkID, it->force, it->name.c_str(),
+						            it->chatStreamID.empty() ? TEXT("") : TEXT("-"), it->chatStreamID.c_str());
+					}
 					ListBox_AddString(hList, text);
 					if (it->jkID == currentJKToGet_) {
 						ListBox_SetCurSel(hList, ListBox_GetCount(hList) - 1);
@@ -2467,7 +2496,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							if (it != forceList_.end() && it->jkID == e.jkID) {
 								// 勢いと(もしあれば)名前を上書き
 								std::cmatch mForce, mName;
-								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? strtol(mForce[1].first, nullptr, 10) : 0;
+								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? strtol(mForce[1].first, nullptr, 10) : -1;
 								if (std::regex_search(m[2].first, m[2].second, mName, reName)) {
 									TCHAR szName[64];
 									int len = MultiByteToWideChar(CP_UTF8, 0, mName[1].first, static_cast<int>(mName[1].length()), szName, _countof(szName) - 1);
@@ -2496,6 +2525,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// 切断
 				OutputMessageLog(TEXT("コメントサーバとの通信を切断しました。"));
 				WriteToLogfile(-1);
+				currentJK_ = -1;
 			} else {
 				// 受信中
 				{
@@ -2514,6 +2544,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 						if (ProcessChatTag(rpl, !bSpecFile_, min(max(-forwardOffset_, 0), 30000))) {
 							dprintf(TEXT("#")); // DEBUG
 							WriteToLogfile(currentJK_, rpl);
+							++currentJKChatCount_;
 							bRead = true;
 						}
 						std::cmatch m;

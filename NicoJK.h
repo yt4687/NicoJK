@@ -165,6 +165,9 @@ private:
 	std::vector<char> jkBuf_;
 	int currentJKToGet_;
 	int currentJK_;
+	int currentJKChatCount_;
+	int currentJKForceByChatCount_;
+	DWORD currentJKForceByChatCountTick_;
 	DWORD lastPostTick_;
 	TCHAR lastPostComm_[POST_COMMENT_MAX];
 
