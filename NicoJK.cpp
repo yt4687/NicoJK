@@ -454,40 +454,29 @@ void CNicoJK::LoadFromIni()
 	s_.commentDuration		= GetBufferedProfileInt(buf.data(), TEXT("commentDuration"), CCommentWindow::DISPLAY_DURATION);
 	s_.commentDrawLineCount = GetBufferedProfileInt(buf.data(), TEXT("commentDrawLineCount"), CCommentWindow::DEFAULT_LINE_DRAW_COUNT);
 	s_.logfileMode			= GetBufferedProfileInt(buf.data(), TEXT("logfileMode"), 0);
-	TCHAR val[SETTING_VALUE_MAX];
-	GetBufferedProfileString(buf.data(), TEXT("logfileDrivers"),
-	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
-	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
-	                         val, _countof(val));
-	s_.logfileDrivers = val;
-	GetBufferedProfileString(buf.data(), TEXT("nonTunerDrivers"),
-	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
-	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
-	                         val, _countof(val));
-	s_.nonTunerDrivers = val;
-	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
-	s_.execGetCookie = val;
-	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
-	s_.execGetV10Key = val;
-	GetBufferedProfileString(buf.data(), TEXT("channelsUri"), TEXT(""), val, _countof(val));
+	s_.logfileDrivers		= GetBufferedProfileToString(buf.data(), TEXT("logfileDrivers"),
+							                             TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
+							                             TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"));
+	s_.nonTunerDrivers		= GetBufferedProfileToString(buf.data(), TEXT("nonTunerDrivers"),
+							                             TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
+							                             TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"));
+	s_.execGetCookie		= GetBufferedProfileToString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"));
+	s_.execGetV10Key		= GetBufferedProfileToString(buf.data(), TEXT("execGetV10Key"), TEXT(""));
+	tstring val				= GetBufferedProfileToString(buf.data(), TEXT("channelsUri"), TEXT(""));
 	s_.channelsUri.clear();
-	for (size_t i = 0; val[i]; ++i) {
+	for (size_t i = 0; i < val.size(); ++i) {
 		if (TEXT('!') <= val[i] && val[i] <= TEXT('~')) {
 			s_.channelsUri += static_cast<char>(val[i]);
 		}
 	}
-	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
-	                         TEXT("[cyan]:[red]:[green small]:[orange]::"),
-	                         val, _countof(val));
-	s_.mailDecorations = val;
+	s_.mailDecorations		= GetBufferedProfileToString(buf.data(), TEXT("mailDecorations"), TEXT("[cyan]:[red]:[green small]:[orange]::"));
 	s_.bAnonymity			= GetBufferedProfileInt(buf.data(), TEXT("anonymity"), 1) != 0;
 	s_.bUseOsdCompositor	= GetBufferedProfileInt(buf.data(), TEXT("useOsdCompositor"), 0) != 0;
 	s_.bUseTexture			= GetBufferedProfileInt(buf.data(), TEXT("useTexture"), 1) != 0;
 	s_.bUseDrawingThread	= GetBufferedProfileInt(buf.data(), TEXT("useDrawingThread"), 1) != 0;
 	s_.bSetChannel			= GetBufferedProfileInt(buf.data(), TEXT("setChannel"), 1) != 0;
 	s_.maxAutoReplace		= GetBufferedProfileInt(buf.data(), TEXT("maxAutoReplace"), 20);
-	GetBufferedProfileString(buf.data(), TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
-	s_.abone = val;
+	s_.abone				= GetBufferedProfileToString(buf.data(), TEXT("abone"), TEXT("### NG ### &"));
 	s_.dropLogfileMode		= GetBufferedProfileInt(buf.data(), TEXT("dropLogfileMode"), 0);
 	s_.defaultPlaybackDelay	= GetBufferedProfileInt(buf.data(), TEXT("defaultPlaybackDelay"), 500);
 	// 実況ログフォルダのパスを作成
@@ -524,12 +513,7 @@ void CNicoJK::LoadFromIni()
 	s_.headerMask			= GetBufferedProfileInt(buf.data(), TEXT("HeaderMask"), 0);
 	s_.bSetRelative			= GetBufferedProfileInt(buf.data(), TEXT("SetRelative"), 0) != 0;
 
-	ntsIDList_.clear();
-	ntsIDList_.reserve(_countof(DEFAULT_NTSID_TABLE));
-	for (int i = 0; i < _countof(DEFAULT_NTSID_TABLE); ++i) {
-		NETWORK_SERVICE_ID_ELEM e = {DEFAULT_NTSID_TABLE[i]&~0xFFF0, DEFAULT_NTSID_TABLE[i]>>4&0xFFF};
-		ntsIDList_.push_back(e);
-	}
+	ntsIDList_.assign(DEFAULT_NTSID_TABLE, DEFAULT_NTSID_TABLE + _countof(DEFAULT_NTSID_TABLE));
 	// 設定ファイルのネットワーク/サービスID-実況ID対照表を、ソートを維持しながらマージ
 	buf = GetPrivateProfileSectionBuffer(TEXT("Channels"), iniFileName_.c_str());
 	for (LPCTSTR p = buf.data(); *p; p += _tcslen(p) + 1) {
@@ -592,9 +576,8 @@ void CNicoJK::LoadForceListFromIni()
 		if (e.jkID > 0) {
 			TCHAR key[16];
 			_stprintf_s(key, TEXT("%d"), e.jkID);
-			TCHAR val[SETTING_VALUE_MAX];
-			GetBufferedProfileString(buf.data(), key, TEXT("!"), val, _countof(val));
-			if (_tcscmp(val, TEXT("!"))) {
+			tstring val = GetBufferedProfileToString(buf.data(), key, TEXT("!"));
+			if (val != TEXT("!")) {
 				// とりあえず組み込みのチャンネル名を設定しておく
 				JKID_NAME_ELEM f;
 				f.jkID = e.jkID;
@@ -606,7 +589,7 @@ void CNicoJK::LoadForceListFromIni()
 					f.name = q->name;
 				}
 				e.name = f.name;
-				for (size_t i = 0; val[i]; ++i) {
+				for (size_t i = 0; i < val.size(); ++i) {
 					if ((TEXT('0') <= val[i] && val[i] <= TEXT('9')) ||
 					    (TEXT('A') <= val[i] && val[i] <= TEXT('Z')) ||
 					    (TEXT('a') <= val[i] && val[i] <= TEXT('z'))) {
@@ -650,12 +633,10 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 				e.section = section;
 				TCHAR key[32];
 				_stprintf_s(key, TEXT("Comment%d"), e.key);
-				TCHAR val[SETTING_VALUE_MAX];
-				GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
-				e.comment = val;
+				e.comment = GetBufferedProfileToString(buf.data(), key, TEXT(""));
 				_stprintf_s(key, TEXT("Pattern%d"), e.key);
-				GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
-				if (!e.SetPattern(val)) {
+				tstring val = GetBufferedProfileToString(buf.data(), key, TEXT(""));
+				if (!e.SetPattern(val.c_str())) {
 					TCHAR text[64];
 					_stprintf_s(text, TEXT("%sの正規表現が異常です。"), key);
 					m_pApp->AddLog(text, TVTest::LOG_TYPE_ERROR);

@@ -77,6 +77,25 @@ void GetBufferedProfileString(LPCTSTR lpBuff, LPCTSTR lpKeyName, LPCTSTR lpDefau
 	_tcsncpy_s(lpReturnedString, nSize, lpDefault, _TRUNCATE);
 }
 
+// GetPrivateProfileSection()で取得したバッファから、キーに対応する文字列をtstringで取得する
+tstring GetBufferedProfileToString(LPCTSTR lpBuff, LPCTSTR lpKeyName, LPCTSTR lpDefault)
+{
+	size_t nKeyLen = _tcslen(lpKeyName);
+	while (*lpBuff) {
+		size_t nLen = _tcslen(lpBuff);
+		if (!_tcsnicmp(lpBuff, lpKeyName, nKeyLen) && lpBuff[nKeyLen] == TEXT('=')) {
+			if ((lpBuff[nKeyLen + 1] == TEXT('\'') || lpBuff[nKeyLen + 1] == TEXT('"')) &&
+			    nLen >= nKeyLen + 3 && lpBuff[nKeyLen + 1] == lpBuff[nLen - 1]) {
+				return tstring(lpBuff + nKeyLen + 2, nLen - nKeyLen - 3);
+			} else {
+				return tstring(lpBuff + nKeyLen + 1, nLen - nKeyLen - 1);
+			}
+		}
+		lpBuff += nLen + 1;
+	}
+	return lpDefault;
+}
+
 // GetPrivateProfileSection()で取得したバッファから、キーに対応する数値を取得する
 int GetBufferedProfileInt(LPCTSTR lpBuff, LPCTSTR lpKeyName, int nDefault)
 {

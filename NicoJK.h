@@ -12,8 +12,6 @@ public:
 	static const int CHAT_TAG_MAX = 4096;
 	// 表示できるコメントの最大文字数
 	static const int CHAT_TEXT_MAX = 2048;
-	// 設定値の最大読み込み文字数
-	static const int SETTING_VALUE_MAX = 8192;
 	// 勢いリストを更新する間隔(あんまり短くしちゃダメ!)
 	static const int UPDATE_FORCE_INTERVAL = 20000;
 	// コメントサーバ切断をチェックして再接続する間隔(あんまり短くしちゃダメ!)
