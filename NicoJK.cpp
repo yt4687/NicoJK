@@ -113,6 +113,9 @@ CNicoJK::CNicoJK()
 	, forwardOffsetDelta_(0)
 	, currentJKToGet_(-1)
 	, currentJK_(-1)
+	, currentJKChatCount_(0)
+	, currentJKForceByChatCount_(-1)
+	, currentJKForceByChatCountTick_(0)
 	, lastPostTick_(0)
 	, bRecording_(false)
 	, bUsingLogfileDriver_(false)
@@ -301,7 +304,7 @@ bool CNicoJK::TogglePlugin(bool bEnabled)
 							f.name = p->name;
 						}
 						e.name = f.name;
-						e.force = 0;
+						e.force = -1;
 						// まだなければ追加
 						std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
 							[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
@@ -447,40 +450,29 @@ void CNicoJK::LoadFromIni()
 	s_.commentDuration		= GetBufferedProfileInt(buf.data(), TEXT("commentDuration"), CCommentWindow::DISPLAY_DURATION);
 	s_.commentDrawLineCount = GetBufferedProfileInt(buf.data(), TEXT("commentDrawLineCount"), CCommentWindow::DEFAULT_LINE_DRAW_COUNT);
 	s_.logfileMode			= GetBufferedProfileInt(buf.data(), TEXT("logfileMode"), 0);
-	TCHAR val[SETTING_VALUE_MAX];
-	GetBufferedProfileString(buf.data(), TEXT("logfileDrivers"),
-	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
-	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
-	                         val, _countof(val));
-	s_.logfileDrivers = val;
-	GetBufferedProfileString(buf.data(), TEXT("nonTunerDrivers"),
-	                         TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
-	                         TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"),
-	                         val, _countof(val));
-	s_.nonTunerDrivers = val;
-	GetBufferedProfileString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"), val, _countof(val));
-	s_.execGetCookie = val;
-	GetBufferedProfileString(buf.data(), TEXT("execGetV10Key"), TEXT(""), val, _countof(val));
-	s_.execGetV10Key = val;
-	GetBufferedProfileString(buf.data(), TEXT("channelsUri"), TEXT(""), val, _countof(val));
+	s_.logfileDrivers		= GetBufferedProfileToString(buf.data(), TEXT("logfileDrivers"),
+							                             TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
+							                             TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"));
+	s_.nonTunerDrivers		= GetBufferedProfileToString(buf.data(), TEXT("nonTunerDrivers"),
+							                             TEXT("BonDriver_UDP.dll:BonDriver_TCP.dll:BonDriver_File.dll:BonDriver_RecTask.dll:BonDriver_TsTask.dll:")
+							                             TEXT("BonDriver_NetworkPipe.dll:BonDriver_Pipe.dll:BonDriver_Pipe2.dll"));
+	s_.execGetCookie		= GetBufferedProfileToString(buf.data(), TEXT("execGetCookie"), TEXT("cmd /c echo ;"));
+	s_.execGetV10Key		= GetBufferedProfileToString(buf.data(), TEXT("execGetV10Key"), TEXT(""));
+	tstring val				= GetBufferedProfileToString(buf.data(), TEXT("channelsUri"), TEXT(""));
 	s_.channelsUri.clear();
-	for (size_t i = 0; val[i]; ++i) {
+	for (size_t i = 0; i < val.size(); ++i) {
 		if (TEXT('!') <= val[i] && val[i] <= TEXT('~')) {
 			s_.channelsUri += static_cast<char>(val[i]);
 		}
 	}
-	GetBufferedProfileString(buf.data(), TEXT("mailDecorations"),
-	                         TEXT("[cyan]:[red]:[green small]:[orange]::"),
-	                         val, _countof(val));
-	s_.mailDecorations = val;
+	s_.mailDecorations		= GetBufferedProfileToString(buf.data(), TEXT("mailDecorations"), TEXT("[cyan]:[red]:[green small]:[orange]::"));
 	s_.bAnonymity			= GetBufferedProfileInt(buf.data(), TEXT("anonymity"), 1) != 0;
 	s_.bUseOsdCompositor	= GetBufferedProfileInt(buf.data(), TEXT("useOsdCompositor"), 0) != 0;
 	s_.bUseTexture			= GetBufferedProfileInt(buf.data(), TEXT("useTexture"), 1) != 0;
 	s_.bUseDrawingThread	= GetBufferedProfileInt(buf.data(), TEXT("useDrawingThread"), 1) != 0;
 	s_.bSetChannel			= GetBufferedProfileInt(buf.data(), TEXT("setChannel"), 1) != 0;
 	s_.maxAutoReplace		= GetBufferedProfileInt(buf.data(), TEXT("maxAutoReplace"), 20);
-	GetBufferedProfileString(buf.data(), TEXT("abone"), TEXT("### NG ### &"), val, _countof(val));
-	s_.abone = val;
+	s_.abone				= GetBufferedProfileToString(buf.data(), TEXT("abone"), TEXT("### NG ### &"));
 	s_.dropLogfileMode		= GetBufferedProfileInt(buf.data(), TEXT("dropLogfileMode"), 0);
 	s_.defaultPlaybackDelay	= GetBufferedProfileInt(buf.data(), TEXT("defaultPlaybackDelay"), 500);
 	// 実況ログフォルダのパスを作成
@@ -517,12 +509,7 @@ void CNicoJK::LoadFromIni()
 	s_.headerMask			= GetBufferedProfileInt(buf.data(), TEXT("HeaderMask"), 0);
 	s_.bSetRelative			= GetBufferedProfileInt(buf.data(), TEXT("SetRelative"), 0) != 0;
 
-	ntsIDList_.clear();
-	ntsIDList_.reserve(_countof(DEFAULT_NTSID_TABLE));
-	for (int i = 0; i < _countof(DEFAULT_NTSID_TABLE); ++i) {
-		NETWORK_SERVICE_ID_ELEM e = {DEFAULT_NTSID_TABLE[i]&~0xFFF0, DEFAULT_NTSID_TABLE[i]>>4&0xFFF};
-		ntsIDList_.push_back(e);
-	}
+	ntsIDList_.assign(DEFAULT_NTSID_TABLE, DEFAULT_NTSID_TABLE + _countof(DEFAULT_NTSID_TABLE));
 	// 設定ファイルのネットワーク/サービスID-実況ID対照表を、ソートを維持しながらマージ
 	buf = GetPrivateProfileSectionBuffer(TEXT("Channels"), iniFileName_.c_str());
 	for (LPCTSTR p = buf.data(); *p; p += _tcslen(p) + 1) {
@@ -572,7 +559,7 @@ void CNicoJK::LoadForceListFromIni()
 			e.jkID = DEFAULT_JKID_NAME_TABLE[i].jkID;
 			e.name = DEFAULT_JKID_NAME_TABLE[i].name;
 			e.chatStreamID = DEFAULT_JKID_NAME_TABLE[i].chatStreamID;
-			e.force = 0;
+			e.force = -1;
 			forceList_.push_back(e);
 		}
 	}
@@ -585,9 +572,8 @@ void CNicoJK::LoadForceListFromIni()
 		if (e.jkID > 0) {
 			TCHAR key[16];
 			_stprintf_s(key, TEXT("%d"), e.jkID);
-			TCHAR val[SETTING_VALUE_MAX];
-			GetBufferedProfileString(buf.data(), key, TEXT("!"), val, _countof(val));
-			if (_tcscmp(val, TEXT("!"))) {
+			tstring val = GetBufferedProfileToString(buf.data(), key, TEXT("!"));
+			if (val != TEXT("!")) {
 				// とりあえず組み込みのチャンネル名を設定しておく
 				JKID_NAME_ELEM f;
 				f.jkID = e.jkID;
@@ -599,7 +585,7 @@ void CNicoJK::LoadForceListFromIni()
 					f.name = q->name;
 				}
 				e.name = f.name;
-				for (size_t i = 0; val[i]; ++i) {
+				for (size_t i = 0; i < val.size(); ++i) {
 					if ((TEXT('0') <= val[i] && val[i] <= TEXT('9')) ||
 					    (TEXT('A') <= val[i] && val[i] <= TEXT('Z')) ||
 					    (TEXT('a') <= val[i] && val[i] <= TEXT('z'))) {
@@ -612,7 +598,7 @@ void CNicoJK::LoadForceListFromIni()
 						break;
 					}
 				}
-				e.force = 0;
+				e.force = -1;
 				// まだなければ追加
 				std::vector<FORCE_ELEM>::iterator it = std::lower_bound(forceList_.begin(), forceList_.end(), e,
 					[](const FORCE_ELEM &a, const FORCE_ELEM &b) { return a.jkID < b.jkID; });
@@ -643,12 +629,10 @@ void CNicoJK::LoadRplListFromIni(LPCTSTR section, std::vector<RPL_ELEM> *pRplLis
 				e.section = section;
 				TCHAR key[32];
 				_stprintf_s(key, TEXT("Comment%d"), e.key);
-				TCHAR val[SETTING_VALUE_MAX];
-				GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
-				e.comment = val;
+				e.comment = GetBufferedProfileToString(buf.data(), key, TEXT(""));
 				_stprintf_s(key, TEXT("Pattern%d"), e.key);
-				GetBufferedProfileString(buf.data(), key, TEXT(""), val, _countof(val));
-				if (!e.SetPattern(val)) {
+				tstring val = GetBufferedProfileToString(buf.data(), key, TEXT(""));
+				if (!e.SetPattern(val.c_str())) {
 					TCHAR text[64];
 					_stprintf_s(text, TEXT("%sの正規表現が異常です。"), key);
 					m_pApp->AddLog(text, TVTest::LOG_TYPE_ERROR);
@@ -1855,6 +1839,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			jkStream_.BeginClose();
 			channelStream_.Close();
 			jkStream_.Close();
+			currentJK_ = -1;
 
 			if (hSyncThread_) {
 				bQuitSyncThread_ = true;
@@ -2144,12 +2129,27 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	case WM_TIMER:
 		switch (wParam) {
 		case TIMER_UPDATE:
+			if (currentJK_ >= 0) {
+				// 自力計算による勢い情報を更新する
+				DWORD tick = GetTickCount();
+				if (tick - currentJKForceByChatCountTick_ >= 30000) {
+					// 初回は10コメ引く
+					int count = max(currentJKChatCount_ - (currentJKForceByChatCount_ < 0 ? 10 : 0), 0);
+					currentJKForceByChatCount_ = count * 60 / ((tick - currentJKForceByChatCountTick_) / 1000);
+					currentJKChatCount_ = 0;
+					currentJKForceByChatCountTick_ = tick;
+				}
+			}
 			if (!bDisplayLogList_ && IsWindowVisible(hwnd)) {
 				// 勢いを更新する
 				if (!s_.channelsUri.empty() &&
 				    channelStream_.Send(hwnd, WMS_FORCE, 'G', s_.channelsUri.c_str())) {
 					channelBuf_.clear();
 				} else {
+					for (auto it = forceList_.begin(); it != forceList_.end(); ++it) {
+						// 自力計算による勢い情報を使う
+						it->force = it->jkID == currentJK_ ? currentJKForceByChatCount_ : -1;
+					}
 					SendMessage(hwnd, WM_UPDATE_LIST, 2, 0);
 				}
 			}
@@ -2165,6 +2165,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				if (it != forceList_.end() && it->jkID == e.jkID && !it->chatStreamID.empty()) {
 					if (jkStream_.Send(hwnd, WMS_JK, 'L', (it->chatStreamID + " " + cookie_).c_str())) {
 						currentJK_ = currentJKToGet_;
+						currentJKChatCount_ = 0;
+						currentJKForceByChatCount_ = -1;
+						currentJKForceByChatCountTick_ = GetTickCount();
 						OutputMessageLog(TEXT("コメントサーバに接続開始しました。"));
 					}
 				}
@@ -2380,8 +2383,15 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// 勢いリスト表示中
 				for (auto it = forceList_.cbegin(); it != forceList_.end(); ++it) {
 					TCHAR text[256];
-					_stprintf_s(text, TEXT("jk%d (%.63s-%.63S) 勢い：%d"),
-					            it->jkID, it->name.c_str(), it->chatStreamID.c_str(), it->force);
+					if (it->force < 0) {
+						_stprintf_s(text, TEXT("jk%d 勢? (%.63s%s%.63S)"),
+						            it->jkID, it->name.c_str(),
+						            it->chatStreamID.empty() ? TEXT("") : TEXT("-"), it->chatStreamID.c_str());
+					} else {
+						_stprintf_s(text, TEXT("jk%d 勢%d (%.63s%s%.63S)"),
+						            it->jkID, it->force, it->name.c_str(),
+						            it->chatStreamID.empty() ? TEXT("") : TEXT("-"), it->chatStreamID.c_str());
+					}
 					ListBox_AddString(hList, text);
 					if (it->jkID == currentJKToGet_) {
 						ListBox_SetCurSel(hList, ListBox_GetCount(hList) - 1);
@@ -2419,7 +2429,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							if (it != forceList_.end() && it->jkID == e.jkID) {
 								// 勢いと(もしあれば)名前を上書き
 								std::cmatch mForce, mName;
-								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? atoi(mForce[1].first) : 0;
+								it->force = std::regex_search(m[2].first, m[2].second, mForce, reForce) ? strtol(mForce[1].first, nullptr, 10) : -1;
 								if (std::regex_search(m[2].first, m[2].second, mName, reName)) {
 									TCHAR szName[64];
 									int len = MultiByteToWideChar(CP_UTF8, 0, mName[1].first, static_cast<int>(mName[1].length()), szName, _countof(szName) - 1);
@@ -2437,7 +2447,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		return TRUE;
 	case WMS_JK:
 		{
-			static const std::regex reChatResult("^<chat_result(?= ).*? status=\"(?!0\")(\\d+)\"");
+			static const std::regex reChatResult("^<chat_result(?= )[^>]*? status=\"(?!0\")(\\d+)\"");
 			static const std::regex reXRoom("^<x_room ");
 			static const std::regex reNickname("^<x_room(?= )[^>]*? nickname=\"(.*?)\"");
 			static const std::regex reIsLoggedIn("^<x_room(?= )[^>]*? is_logged_in=\"1\"");
@@ -2448,26 +2458,29 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				// 切断
 				OutputMessageLog(TEXT("コメントサーバとの通信を切断しました。"));
 				WriteToLogfile(-1);
+				currentJK_ = -1;
 			} else {
 				// 受信中
-				{
-					bool bRead = false;
-					for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
-						std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
-						if (itEnd == jkBuf_.end()) {
-							break;
-						}
-						*itEnd = '\0';
-						if (itEnd - it >= CHAT_TAG_MAX) {
-							*(it + CHAT_TAG_MAX - 1) = '\0';
-						}
-						const char *rpl = &*it;
+				bool bRead = false;
+				for (std::vector<char>::iterator it = jkBuf_.begin(); ; ) {
+					std::vector<char>::iterator itEnd = std::find(it, jkBuf_.end(), '\n');
+					if (itEnd == jkBuf_.end()) {
+						break;
+					}
+					*itEnd = '\0';
+					if (itEnd - it >= CHAT_TAG_MAX) {
+						*(it + CHAT_TAG_MAX - 1) = '\0';
+					}
+					const char *rpl = &*it;
+					if (!strncmp(rpl, "<chat ", 6)) {
 						// 指定ファイル再生中は混じると鬱陶しいので表示しない。後退指定はある程度反映
 						if (ProcessChatTag(rpl, !bSpecFile_, min(max(-forwardOffset_, 0), 30000))) {
 							dprintf(TEXT("#")); // DEBUG
 							WriteToLogfile(currentJK_, rpl);
+							++currentJKChatCount_;
 							bRead = true;
 						}
+					} else {
 						std::cmatch m;
 						if (std::regex_search(rpl, m, reChatResult)) {
 							// コメント投稿失敗の応答を取得した
@@ -2488,17 +2501,17 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 							_stprintf_s(text, TEXT("コメントサーバに接続しました(%s%s)。"), isLoggedIn ? TEXT("login=") : TEXT(""), nickname);
 							OutputMessageLog(text);
 						}
+					}
 #ifdef _DEBUG
-						TCHAR debug[512];
-						int debugLen = MultiByteToWideChar(CP_UTF8, 0, rpl, -1, debug, _countof(debug) - 1);
-						debug[debugLen] = TEXT('\0');
-						dprintf(TEXT("%s\n"), debug); // DEBUG
+					TCHAR debug[512];
+					int debugLen = MultiByteToWideChar(CP_UTF8, 0, rpl, -1, debug, _countof(debug) - 1);
+					debug[debugLen] = TEXT('\0');
+					dprintf(TEXT("%s\n"), debug); // DEBUG
 #endif
-						it = itEnd + 1;
-					}
-					if (bRead && bDisplayLogList_) {
-						SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
-					}
+					it = itEnd + 1;
+				}
+				if (bRead && bDisplayLogList_) {
+					SendMessage(hwnd, WM_UPDATE_LIST, FALSE, 0);
 				}
 			}
 		}
