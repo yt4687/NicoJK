@@ -33,6 +33,19 @@ std::string UnprotectDpapiToString(const char *src);
 std::string UnprotectV10ToString(const char *src, const char *v10Key, char *buf, size_t bufSize);
 std::string GetCookieString(LPCTSTR execGetCookie, LPCTSTR execGetV10Key, char *buf, size_t bufSize, int timeout);
 
+inline FILETIME LongLongToFileTime(LONGLONG ll)
+{
+	FILETIME ft;
+	ft.dwLowDateTime = static_cast<DWORD>(ll);
+	ft.dwHighDateTime = static_cast<DWORD>(ll >> 32);
+	return ft;
+}
+
+inline LONGLONG FileTimeToLongLong(FILETIME ft)
+{
+	return ft.dwLowDateTime | static_cast<LONGLONG>(ft.dwHighDateTime) << 32;
+}
+
 // FindFirstFile()の結果を列挙する
 template<class P>
 void EnumFindFile(LPCTSTR pattern, P enumProc)

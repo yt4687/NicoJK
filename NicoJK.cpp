@@ -831,10 +831,7 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 				hLogfile_ = CreateFile((s_.logfileFolder + name).c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 				if (hLogfile_ != INVALID_HANDLE_VALUE) {
 					// ヘッダを書き込む(別に無くてもいい)
-					LONGLONG llftUtc = UnixTimeToFileTime(tm);
-					FILETIME ftUtc, ft;
-					ftUtc.dwLowDateTime = static_cast<DWORD>(llftUtc);
-					ftUtc.dwHighDateTime = static_cast<DWORD>(llftUtc >> 32);
+					FILETIME ft, ftUtc = LongLongToFileTime(UnixTimeToFileTime(tm));
 					FileTimeToLocalFileTime(&ftUtc, &ft);
 					SYSTEMTIME st;
 					FileTimeToSystemTime(&ft, &st);
@@ -1348,10 +1345,7 @@ bool CNicoJK::ProcessChatTag(const char *tag, bool bShow, int showDelay)
 
 		// リストボックスのログ表示キューに追加
 		LOG_ELEM e;
-		LONGLONG llftUtc = UnixTimeToFileTime(tm);
-		FILETIME ftUtc, ft;
-		ftUtc.dwLowDateTime = static_cast<DWORD>(llftUtc);
-		ftUtc.dwHighDateTime = static_cast<DWORD>(llftUtc >> 32);
+		FILETIME ft, ftUtc = LongLongToFileTime(UnixTimeToFileTime(tm));
 		FileTimeToLocalFileTime(&ftUtc, &ft);
 		FileTimeToSystemTime(&ft, &e.st);
 		e.no = 0;
@@ -1436,17 +1430,20 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 	_tcsncpy_s(cmd, comm, min(cmdLen, _countof(cmd) - 1));
 	LPCTSTR arg = &comm[cmdLen] + _tcsspn(&comm[cmdLen], TEXT(" "));
 	LPTSTR endp;
-	int nArg = _tcstol(arg, &endp, 10);
+	LONGLONG llArg = _tcstoi64(arg, &endp, 10);
 	if (endp == arg) {
-		nArg = INT_MAX;
+		llArg = LLONG_MAX;
 	}
+	int nArg = static_cast<int>(min<LONGLONG>(max<LONGLONG>(llArg, INT_MIN), INT_MAX));
 	if (!_tcsicmp(cmd, TEXT("help"))) {
 		static const TCHAR text[] =
 			TEXT("@help\tヘルプを表示")
 			TEXT("\n@fopa N\t勢い窓の透過レベル1～10(Nを省略すると10)。")
 			TEXT("\n@mask N\tログの時間(ID)部の省略マスク(Nを省略すると0)。")
 			TEXT("\n@opa N\tコメントの透過レベル0～10(Nを省略すると10)。")
-			TEXT("\n@fwd N\tコメントの前進")
+			TEXT("\n@fwd N\tコメントをNミリ秒だけ前進")
+			TEXT("\n@fwds N\tコメントをN秒だけ前進")
+			TEXT("\n@jmp yyMMddHHmm\tコメントを指定の年月日時分に移動")
 			TEXT("\n@size N\tコメントの文字サイズをN%にする(Nを省略すると100%)。")
 			TEXT("\n@speed N\tコメントの速度をN%にする(Nを省略すると100%)。")
 			TEXT("\n@rl\t置換リストのすべてのCommentをリストする")
@@ -1472,11 +1469,38 @@ void CNicoJK::ProcessLocalPost(LPCTSTR comm)
 		TCHAR text[64];
 		_stprintf_s(text, TEXT("現在の透過レベルは%dです。"), opa);
 		OutputMessageLog(text);
-	} else if (!_tcsicmp(cmd, TEXT("fwd")) && nArg != INT_MAX) {
+	} else if ((!_tcsicmp(cmd, TEXT("fwd")) || !_tcsicmp(cmd, TEXT("fwds"))) && nArg != INT_MAX) {
 		if (nArg == 0) {
 			forwardOffsetDelta_ = -forwardOffset_;
 		} else {
-			forwardOffsetDelta_ += nArg;
+			forwardOffsetDelta_ += cmd[3] ? nArg * 1000LL : nArg;
+		}
+	} else if (!_tcsicmp(cmd, TEXT("jmp")) && llArg == LLONG_MAX) {
+		// リセット
+		forwardOffsetDelta_ = -forwardOffset_;
+	} else if (!_tcsicmp(cmd, TEXT("jmp")) && 0 <= llArg && llArg < 10000000000) {
+		LONGLONG llft = GetCurrentTot();
+		FILETIME ft = LongLongToFileTime(llft);
+		SYSTEMTIME st;
+		if (llft >= 0 && FileTimeToSystemTime(&ft, &st)) {
+			// 年の上位2桁を適当に補う
+			LONGLONG adjustYear = st.wYear / 100 * 100 + llArg / 100000000;
+			adjustYear += adjustYear - st.wYear > 50 ? -100 : adjustYear - st.wYear < -50 ? 100 : 0;
+			st.wYear = static_cast<WORD>(adjustYear);
+			st.wMonth = static_cast<WORD>(llArg / 1000000 % 100);
+			st.wDay = static_cast<WORD>(llArg / 10000 % 100);
+			st.wHour = static_cast<WORD>(llArg / 100 % 100);
+			st.wMinute = static_cast<WORD>(llArg % 100);
+			st.wSecond = 0;
+			st.wMilliseconds = 0;
+			FILETIME ftUtc;
+			if (SystemTimeToFileTime(&st, &ft) && LocalFileTimeToFileTime(&ft, &ftUtc)) {
+				forwardOffsetDelta_ = FileTimeToLongLong(ftUtc) / FILETIME_MILLISECOND - llft / FILETIME_MILLISECOND - forwardOffset_;
+			} else {
+				OutputMessageLog(TEXT("Error:引数の日時が不正です。"));
+			}
+		} else {
+			OutputMessageLog(TEXT("Error:ストリームの時刻が不明です。"));
 		}
 	} else if (!_tcsicmp(cmd, TEXT("size"))) {
 		int rate = min(max(nArg == INT_MAX ? 100 : nArg, 10), 1000);
@@ -2236,7 +2260,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				bool bNotify = false;
 				if (0 < forwardOffsetDelta_ && forwardOffsetDelta_ <= 30000) {
 					// 前進させて調整
-					int delta = min(forwardOffsetDelta_, forwardOffsetDelta_ < 10000 ? 500 : 2000);
+					int delta = min(static_cast<int>(forwardOffsetDelta_), forwardOffsetDelta_ < 10000 ? 500 : 2000);
 					forwardOffset_ += delta;
 					forwardOffsetDelta_ -= delta;
 					bNotify = forwardOffsetDelta_ == 0;
@@ -2254,8 +2278,20 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					commentWindow_.ClearChat();
 				}
 				if (bNotify) {
-					TCHAR text[32];
-					_stprintf_s(text, TEXT("(Offset %d)"), forwardOffset_ / 1000);
+					TCHAR text[64];
+					int sign = forwardOffset_ < 0 ? -1 : 1;
+					LONGLONG absSec = sign * forwardOffset_ / 1000;
+					LONGLONG absMin = absSec / 60;
+					LONGLONG absHour = absMin / 60;
+					if (absSec < 60) {
+						_stprintf_s(text, TEXT("(Offset %lld)"), sign * absSec);
+					} else if (absMin < 60) {
+						_stprintf_s(text, TEXT("(Offset %lld:%02lld)"), sign * absMin, absSec % 60);
+					} else if (absHour < 24) {
+						_stprintf_s(text, TEXT("(Offset %lld:%02lld:%02lld)"), sign * absHour, absMin % 60, absSec % 60);
+					} else {
+						_stprintf_s(text, TEXT("(Offset %lld'%02lld:%02lld:%02lld)"), sign * (absHour / 24), absHour % 24, absMin % 60, absSec % 60);
+					}
 					commentWindow_.AddChat(text, RGB(0x00,0xFF,0xFF), CCommentWindow::CHAT_POS_UE);
 				}
 				// コメントの表示を進める
@@ -2267,9 +2303,9 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				if (llft >= 0) {
 					bool bRead = false;
 					char text[CHAT_TAG_MAX];
-					unsigned int tm = FileTimeToUnixTime(llft);
-					tm = forwardOffset_ < 0 ? tm - (-forwardOffset_ / 1000) : tm + forwardOffset_ / 1000;
-					while (ReadFromLogfile(bSpecFile_ ? 0 : currentJKToGet_, text, _countof(text), tm)) {
+					LONGLONG tm = FileTimeToUnixTime(llft);
+					tm = min(max(forwardOffset_ < 0 ? tm - (-forwardOffset_ / 1000) : tm + forwardOffset_ / 1000, 0LL), UINT_MAX - 3600LL);
+					while (ReadFromLogfile(bSpecFile_ ? 0 : currentJKToGet_, text, _countof(text), static_cast<unsigned int>(tm))) {
 						ProcessChatTag(text);
 						bRead = true;
 					}
@@ -2522,7 +2558,7 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					const char *rpl = &*it;
 					if (!strncmp(rpl, "<chat ", 6)) {
 						// 指定ファイル再生中は混じると鬱陶しいので表示しない。後退指定はある程度反映
-						if (ProcessChatTag(rpl, !bSpecFile_, min(max(-forwardOffset_, 0), 30000))) {
+						if (ProcessChatTag(rpl, !bSpecFile_, static_cast<int>(min(max(-forwardOffset_, 0LL), 30000LL)))) {
 							dprintf(TEXT("#")); // DEBUG
 							WriteToLogfile(currentJK_, rpl);
 							++currentJKChatCount_;

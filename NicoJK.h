@@ -153,8 +153,8 @@ private:
 	bool bPendingTimerForward_;
 	bool bHalfSkip_;
 	bool bFlipFlop_;
-	int forwardOffset_;
-	int forwardOffsetDelta_;
+	LONGLONG forwardOffset_;
+	LONGLONG forwardOffsetDelta_;
 
 	// 通信用
 	CJKStream channelStream_;
