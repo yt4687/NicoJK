@@ -20,6 +20,17 @@ NicoJK.tvtpおよびNicoJK.iniをTVTestのPluginフォルダに入れてくだ�
 に保存されていきます。録画中に受信した実況コメントがファイル再生プラグイン(何で
 もいい)で再生中に表示されればOKです。
 
+同梱のjkimlog.exeは外部のログファイルを"NicoJK"フォルダに取り込むコマンドライン
+ツールです。使用する場合はjkimlog.exeを"NicoJK"フォルダの直下に置いてください。
+ログファイル(.jklか.xmlか.txtで、ファイル名のどこかに"jk{番号}"を含むこと)のパス
+を引数に与えて使います。すでに存在するログと重複するときは、重複する範囲のログが
+トリムされてから取り込まれます。ログファイルをjkimlog.exeにD&Dするだけで使えます
+が、以下のような内容の.batファイルをショートカット代わりにすると便利です:
+> @echo off
+> "Path\to\TVTest\Plugins\NicoJK\jkimlog.exe" %1
+> if %errorlevel% equ 0 del %1
+> pause
+
 ■設定
 NicoJK.iniを確認してください。
 

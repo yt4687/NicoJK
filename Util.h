@@ -27,7 +27,6 @@ unsigned int FileTimeToUnixTime(LONGLONG ll);
 LONGLONG AribToFileTime(const BYTE *pData);
 BOOL FileOpenDialog(HWND hwndOwner, LPCTSTR lpstrFilter, LPTSTR lpstrFile, DWORD nMaxFile);
 const char *FindZippedLogfile(FIND_LOGFILE_CACHE &cache, bool &bSameResult, LPCTSTR zipPath, unsigned int tmToRead);
-bool ImportLogfile(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmNew);
 bool GetProcessOutput(LPCTSTR commandLine, LPCTSTR currentDir, char *buf, size_t bufSize, int timeout = INT_MAX);
 std::string UnprotectDpapiToString(const char *src);
 std::string UnprotectV10ToString(const char *src, const char *v10Key, char *buf, size_t bufSize);

@@ -14,20 +14,20 @@
 // Bitmap resources
 //
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDB_ICON           BITMAP         ".\\Icon.bmp"
+IDB_ICON           BITMAP         ".\\res\\Icon.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDB_FORCE          BITMAP         ".\\Force.bmp"
+IDB_FORCE          BITMAP         ".\\res\\Force.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDB_FORCE16        BITMAP         ".\\Force16.bmp"
+IDB_FORCE16        BITMAP         ".\\res\\Force16.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDB_COMMENT        BITMAP         ".\\Comment.bmp"
+IDB_COMMENT        BITMAP         ".\\res\\Comment.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDB_COMMENT16      BITMAP         ".\\Comment16.bmp"
+IDB_COMMENT16      BITMAP         ".\\res\\Comment16.bmp"

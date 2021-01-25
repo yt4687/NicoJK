@@ -93,6 +93,9 @@
     <ClInclude Include="zlib1\iowin32.h">
       <Filter>ヘッダー ファイル\zlib1</Filter>
     </ClInclude>
+    <ClInclude Include="ImportLogUtil.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -142,6 +145,9 @@
     </ClCompile>
     <ClCompile Include="zlib1\iowin32.c">
       <Filter>ソース ファイル\zlib1</Filter>
+    </ClCompile>
+    <ClCompile Include="ImportLogUtil.cpp">
+      <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

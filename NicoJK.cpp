@@ -4,6 +4,7 @@
 */
 
 #include "stdafx.h"
+#include "ImportLogUtil.h"
 #include "Util.h"
 #include "JKStream.h"
 #include "TextFileReader.h"

@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual C++ Express 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NicoJK", "NicoJK.vcxproj", "{F941C1D5-1DE1-4AEB-9410-4DEC982367EE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jkimlog", "jkimlog\jkimlog.vcxproj", "{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -19,8 +21,19 @@ Global
 		{F941C1D5-1DE1-4AEB-9410-4DEC982367EE}.Release|Win32.Build.0 = Release|Win32
 		{F941C1D5-1DE1-4AEB-9410-4DEC982367EE}.Release|x64.ActiveCfg = Release|x64
 		{F941C1D5-1DE1-4AEB-9410-4DEC982367EE}.Release|x64.Build.0 = Release|x64
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Debug|Win32.Build.0 = Debug|Win32
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Debug|x64.ActiveCfg = Debug|x64
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Debug|x64.Build.0 = Debug|x64
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Release|Win32.ActiveCfg = Release|Win32
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Release|Win32.Build.0 = Release|Win32
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Release|x64.ActiveCfg = Release|x64
+		{F0BBCF8E-0DCE-4B25-BEF2-C29C8DCA25DE}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C86F2D80-E4BD-418B-9E48-448B23733A9A}
 	EndGlobalSection
 EndGlobal
