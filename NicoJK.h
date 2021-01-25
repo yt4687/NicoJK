@@ -9,8 +9,9 @@ public:
 	// リストボックスのログ表示の最小描画間隔
 	static const int COMMENT_REDRAW_INTERVAL = 250;
 	// 処理できるchatタグの最大文字数(char)
-	static const int CHAT_TAG_MAX = 4096;
-	// 表示できるコメントの最大文字数
+	// (既定値はコメントの制限を1024文字として、これが実体参照であった場合の*5にマージンを加えた値)
+	static const int CHAT_TAG_MAX = 1024 * 6;
+	// 表示できるコメントの最大文字数(超えると単なる空コメントとして表示される)
 	static const int CHAT_TEXT_MAX = 2048;
 	// 勢いリストを更新する間隔(あんまり短くしちゃダメ!)
 	static const int UPDATE_FORCE_INTERVAL = 20000;
@@ -111,7 +112,7 @@ private:
 	LONGLONG GetCurrentTot();
 	bool IsMatchDriverName(LPCTSTR drivers);
 	void WriteToLogfile(int jkID, const char *text = nullptr);
-	bool ReadFromLogfile(int jkID, char *text = nullptr, int len = 0, unsigned int tmToRead = 0);
+	bool ReadFromLogfile(int jkID, const char **text = nullptr, unsigned int tmToRead = 0);
 	static LRESULT CALLBACK EventCallback(UINT Event, LPARAM lParam1, LPARAM lParam2, void *pClientData);
 	static BOOL CALLBACK WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT *pResult, void *pUserData);
 	bool ProcessChatTag(const char *tag, bool bShow = true, int showDelay = 0);
@@ -181,7 +182,8 @@ private:
 	FIND_LOGFILE_CACHE findZippedLogfileCache_;
 	unsigned int tmZippedLogfileCachedLast_;
 	CTextFileReader readLogfile_;
-	char readLogText_[CHAT_TAG_MAX];
+	char readLogText_[2][CHAT_TAG_MAX];
+	bool bReadLogTextNext_;
 	unsigned int tmReadLogText_;
 	DWORD readLogfileTick_;
 	LONGLONG llftTot_;

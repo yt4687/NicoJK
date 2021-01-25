@@ -130,6 +130,7 @@ CNicoJK::CNicoJK()
 	, hLogfileLock_(INVALID_HANDLE_VALUE)
 	, currentReadLogfileJK_(-1)
 	, tmZippedLogfileCachedLast_(0)
+	, bReadLogTextNext_(false)
 	, tmReadLogText_(0)
 	, readLogfileTick_(0)
 	, llftTot_(-1)
@@ -141,7 +142,8 @@ CNicoJK::CNicoJK()
 {
 	cookie_[0] = '\0';
 	lastPostComm_[0] = TEXT('\0');
-	readLogText_[0] = '\0';
+	readLogText_[0][0] = '\0';
+	readLogText_[1][0] = '\0';
 	SETTINGS s = {};
 	s_ = s;
 	pcrPids_[0] = -1;
@@ -862,7 +864,8 @@ void CNicoJK::WriteToLogfile(int jkID, const char *text)
 // 指定した実況IDの指定時刻のログ1行を読み込む
 // jkIDが負値のときはログファイルを閉じる
 // jkID==0は指定ファイル再生(tmpSpecFileName_)を表す特殊な実況IDとする
-bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tmToRead)
+// jkID>=0のときtextは必須。戻り値が真のとき*textは次にこのメソッドを呼ぶまで有効
+bool CNicoJK::ReadFromLogfile(int jkID, const char **text, unsigned int tmToRead)
 {
 	if (jkID != 0 && (s_.logfileFolder.empty() || !bUsingLogfileDriver_)) {
 		// ログを読まない
@@ -920,7 +923,8 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 		// まずテキスト形式のログを探す
 		if (!path.empty()) {
 			if (readLogfile_.Open(path.c_str())) {
-				char last[CHAT_TAG_MAX];
+				// readLogText_[!bReadLogTextNext_]はメソッド内で汎用できる
+				char (&last)[CHAT_TAG_MAX] = readLogText_[!bReadLogTextNext_];
 				unsigned int tmLast;
 				// 最終行がtmToReadより過去なら読む価値無し
 				if (!readLogfile_.ReadLastLine(last, _countof(last)) || !GetChatDate(&tmLast, last) || tmLast < tmToRead) {
@@ -929,7 +933,7 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 				} else {
 					// まず2分探索
 					for (LONGLONG scale = 2; ; scale *= 2) {
-						char middle[CHAT_TAG_MAX];
+						char (&middle)[CHAT_TAG_MAX] = readLogText_[!bReadLogTextNext_];
 						int sign = 0;
 						for (;;) {
 							if (!readLogfile_.ReadLine(middle, _countof(middle))) {
@@ -981,9 +985,10 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 		}
 		if (readLogfile_.IsOpen()) {
 			// tmToReadより過去の行を読み飛ばす
+			char (&next)[CHAT_TAG_MAX] = readLogText_[bReadLogTextNext_];
 			unsigned int tm = 0;
 			for (;;) {
-				if (!readLogfile_.ReadLine(readLogText_, _countof(readLogText_))) {
+				if (!readLogfile_.ReadLine(next, _countof(next))) {
 					// 閉じる
 					readLogfile_.Close();
 					if (zippedName) {
@@ -992,7 +997,7 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 						dprintf(TEXT("tmZippedLogfileCachedLast_=%u\n"), tm); // DEBUG
 					}
 					break;
-				} else if (GetChatDate(&tmReadLogText_, readLogText_)) {
+				} else if (GetChatDate(&tmReadLogText_, next)) {
 					if (tmReadLogText_ > tmToRead) { // >=はダメ
 						currentReadLogfileJK_ = jkID;
 
@@ -1012,21 +1017,23 @@ bool CNicoJK::ReadFromLogfile(int jkID, char *text, int textMax, unsigned int tm
 	bool bRet = false;
 	// 開いてたら読み込む
 	if (currentReadLogfileJK_ >= 0) {
-		if (readLogText_[0] && tmReadLogText_ <= tmToRead) {
-			strncpy_s(text, textMax, readLogText_, _TRUNCATE);
-			readLogText_[0] = '\0';
+		if (readLogText_[bReadLogTextNext_][0] && tmReadLogText_ <= tmToRead) {
+			*text = readLogText_[bReadLogTextNext_];
+			bReadLogTextNext_ = !bReadLogTextNext_;
+			readLogText_[bReadLogTextNext_][0] = '\0';
 			bRet = true;
 		}
-		if (!readLogText_[0]) {
+		char (&next)[CHAT_TAG_MAX] = readLogText_[bReadLogTextNext_];
+		if (!next[0]) {
 			for (;;) {
-				if (!readLogfile_.ReadLine(readLogText_, _countof(readLogText_))) {
+				if (!readLogfile_.ReadLine(next, _countof(next))) {
 					// 閉じる
 					readLogfile_.Close();
 					readLogfileTick_ = tick;
 					currentReadLogfileJK_ = -1;
 					OutputMessageLog(TEXT("ログファイルの読み込みを終了しました。"));
 					break;
-				} else if (GetChatDate(&tmReadLogText_, readLogText_)) {
+				} else if (GetChatDate(&tmReadLogText_, next)) {
 					break;
 				}
 			}
@@ -2302,10 +2309,10 @@ LRESULT CNicoJK::ForceWindowProcMain(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				LONGLONG llft = GetCurrentTot();
 				if (llft >= 0) {
 					bool bRead = false;
-					char text[CHAT_TAG_MAX];
+					const char *text;
 					LONGLONG tm = FileTimeToUnixTime(llft);
 					tm = min(max(forwardOffset_ < 0 ? tm - (-forwardOffset_ / 1000) : tm + forwardOffset_ / 1000, 0LL), UINT_MAX - 3600LL);
-					while (ReadFromLogfile(bSpecFile_ ? 0 : currentJKToGet_, text, _countof(text), static_cast<unsigned int>(tm))) {
+					while (ReadFromLogfile(bSpecFile_ ? 0 : currentJKToGet_, &text, static_cast<unsigned int>(tm))) {
 						ProcessChatTag(text);
 						bRead = true;
 					}

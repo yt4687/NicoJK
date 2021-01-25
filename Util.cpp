@@ -294,7 +294,7 @@ static bool TxtToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
 		const std::regex re("^<chat(?= )[^>]*? date=\"(\\d+)\"");
 		std::cmatch m;
-		char buf[4096];
+		char buf[8192];
 		unsigned int tmOld = 0;
 		while (fgets(buf, _countof(buf), fpSrc.get())) {
 			if (std::regex_search(buf, m, re)) {
@@ -350,7 +350,7 @@ static bool JklToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".jkl")) &&
 	    !_tfopen_s(&fp, srcPath, TEXT("rbN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
-		char buf[4096];
+		char buf[8192];
 		if (fread(buf, sizeof(char), 10, fpSrc.get()) == 10 && !memcmp(buf, "<JikkyoRec", 10) && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
 			fpDest.reset(fp);
 			// 空行まで読み飛ばす
@@ -388,23 +388,22 @@ static bool XmlToLocalFormat(LPCTSTR srcPath, LPCTSTR destPath, unsigned int tmN
 	if (len >= 5 && !_tcschr(TEXT("/\\"), srcPath[len - 5]) && !_tcsicmp(&srcPath[len - 4], TEXT(".xml")) &&
 	    !_tfopen_s(&fp, srcPath, TEXT("rN"))) {
 		std::unique_ptr<FILE, decltype(&fclose)> fpSrc(fp, fclose);
-		char buf[4096];
+		char buf[8192];
 		if (fgets(buf, _countof(buf), fpSrc.get()) && strstr(buf, "<?xml") && !_tfopen_s(&fp, destPath, TEXT("wN"))) {
 			fpDest.reset(fp);
 			const std::regex re("<chat(?= )[^>]*? date=\"(\\d+)\"[^]*?</chat>");
 			std::cmatch m;
-			char tag[8192];
-			tag[0] = '\0';
+			size_t bufLen = 0;
 			unsigned int tmOld = 0;
-			while (fgets(buf, _countof(buf), fpSrc.get())) {
-				if (strlen(buf) >= _countof(tag) - strlen(tag)) {
-					tag[0] = '\0';
+			while (fgets(buf + bufLen, static_cast<int>(_countof(buf) - bufLen), fpSrc.get())) {
+				bufLen += strlen(buf + bufLen);
+				if (bufLen >= _countof(buf) - 1) {
+					bufLen = 0;
 					continue;
 				}
-				strcat_s(tag, buf);
-				if (std::regex_search(tag, m, re)) {
+				if (std::regex_search(buf, m, re)) {
 					WriteChatTag(fpDest.get(), m, &tmOld, tmNew);
-					tag[0] = '\0';
+					bufLen = 0;
 				}
 			}
 		}
