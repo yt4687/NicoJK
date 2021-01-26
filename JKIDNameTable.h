@@ -5,7 +5,7 @@
 };
 
 static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
-	// ニコニコ実況チャンネルリスト(2020-01-09時点)(jkIDでソート必須)
+	// ニコニコ実況チャンネルリスト(jkch.sh.txtより)(jkIDでソート必須)
 	{   1, TEXT("NHK 総合"), "ch2646436" },
 	{   2, TEXT("Eテレ"), "ch2646437" },
 	{   4, TEXT("日本テレビ"), "ch2646438" },
@@ -22,7 +22,7 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{ 141, TEXT("BS 日テレ") },
 	{ 151, TEXT("BS 朝日") },
 	{ 161, TEXT("BS-TBS") },
-	{ 171, TEXT("BSジャパン") },
+	{ 171, TEXT("BSテレ東") },
 	{ 181, TEXT("BSフジ") },
 	{ 191, TEXT("WOWOWプライム") },
 	{ 192, TEXT("WOWOWライブ") },
@@ -30,8 +30,8 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{ 200, TEXT("スターチャンネル1") },
 	{ 201, TEXT("スターチャンネル2") },
 	{ 202, TEXT("スターチャンネル3") },
-	{ 211, TEXT("BSイレブン"), "ch2646846" },
-	{ 222, TEXT("TwellV") },
+	{ 211, TEXT("BS11イレブン"), "ch2646846" },
+	{ 222, TEXT("BS12トゥエルビ") },
 	{ 231, TEXT("放送大学") },
 	{ 234, TEXT("BSグリーンチャンネル") },
 	{ 236, TEXT("BSアニマックス") },
@@ -42,8 +42,8 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{ 244, TEXT("J Sports 3") },
 	{ 245, TEXT("J Sports 4") },
 	{ 251, TEXT("BS釣りビジョン") },
-	{ 252, TEXT("IMAGICA BS") },
-	{ 255, TEXT("BS日本映画専門チャンネル") },
+	{ 252, TEXT("シネフィルWOWOW") },
+	{ 255, TEXT("日本映画専門ch") },
 	{ 256, TEXT("ディズニー・チャンネル") },
 	{ 258, TEXT("Dlife") },
 	{ 333, TEXT("AT-X") },
