@@ -1053,6 +1053,7 @@ static int GetWindowHeight(HWND hwnd)
 // 何かイベントが起きると呼ばれる
 LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lParam2, void *pClientData)
 {
+	static_cast<void>(lParam2);
 	CNicoJK *pThis = static_cast<CNicoJK*>(pClientData);
 	switch (Event) {
 	case TVTest::EVENT_PLUGINENABLE:
@@ -1223,6 +1224,9 @@ LRESULT CALLBACK CNicoJK::EventCallback(UINT Event, LPARAM lParam1, LPARAM lPara
 
 BOOL CALLBACK CNicoJK::WindowMsgCallback(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT *pResult, void *pUserData)
 {
+	static_cast<void>(hwnd);
+	static_cast<void>(lParam);
+	static_cast<void>(pResult);
 	CNicoJK *pThis = static_cast<CNicoJK*>(pUserData);
 	switch (uMsg) {
 	case WM_ACTIVATE:
