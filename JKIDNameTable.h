@@ -17,7 +17,7 @@ static const JKID_NAME_ELEM DEFAULT_JKID_NAME_TABLE[] = {
 	{  10, TEXT("テレ玉") },
 	{  11, TEXT("tvk") },
 	{  12, TEXT("チバテレビ") },
-	{ 101, TEXT("NHKBS-1") },
+	{ 101, TEXT("NHKBS-1"), "ch2647992" },
 	{ 103, TEXT("NHK BSプレミアム") },
 	{ 141, TEXT("BS 日テレ") },
 	{ 151, TEXT("BS 朝日") },
